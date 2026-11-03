@@ -1,12 +1,22 @@
 /**
  * FormQR Studio - Layanan Sinkronisasi Database Neon PostgreSQL & Penyimpanan Lokal
- * Menerapkan pola Offline-First & Realtime Cloud Sync:
- * Data dimuat seketika dari cache lokal dan disinkronkan secara mulus ke database Neon PostgreSQL.
+ * Menerapkan pola Dual-Engine:
+ * 1. Serverless API (/api/forms) jika tersedia (Local Dev & Vercel)
+ * 2. Direct Browser Neon Client jika di Static Host (GitHub Pages) tanpa server backend!
+ * 3. Offline Cache LocalStorage jika internet terputus.
  */
 
 import { ItemRiwayatFormulir, KonfigurasiQR } from '../../../contracts/formqr';
 import { SkemaDaftarRiwayat } from '../../../contracts/validation';
 import { MOCK_RIWAYAT_AWAL } from '../../../mock/mockForms';
+import {
+  ambilConnectionStringNeon,
+  ambilRiwayatLangsungNeon,
+  simpanFormulirLangsungNeon,
+  ubahPinLangsungNeon,
+  hapusItemLangsungNeon,
+  bersihkanSemuaLangsungNeon,
+} from './neonClient';
 
 const KUNCI_STORAGE = 'formqr_studio_history_v1';
 const BATAS_MAKSIMAL_RIWAYAT = 50;
@@ -46,46 +56,47 @@ export function simpanDaftarRiwayatLokal(daftar: ItemRiwayatFormulir[]): void {
 }
 
 /**
- * 2. Mengambil riwayat dari Neon DB melalui endpoint /api/forms
+ * 2. Mengambil riwayat dari Neon DB (Mendukung /api/forms & Direct Browser di GitHub Pages)
  */
 export async function sinkronkanDenganNeon(): Promise<{
   data: ItemRiwayatFormulir[];
   status: StatusDatabase;
   pesan?: string;
 }> {
+  // A. Coba jalur /api/forms (Serverless API atau Vite Dev Middleware)
   try {
     const res = await fetch('/api/forms');
-    if (!res.ok) {
-      return {
-        data: ambilDaftarRiwayatLokal(),
-        status: 'mode_lokal',
-        pesan: 'Database Neon belum aktif atau belum dikonfigurasi di .env',
-      };
+    if (res.ok) {
+      const json = await res.json();
+      if (json.sukses && Array.isArray(json.data)) {
+        simpanDaftarRiwayatLokal(json.data);
+        return { data: json.data, status: 'terhubung_neon' };
+      }
     }
-
-    const json = await res.json();
-    if (json.sukses && Array.isArray(json.data)) {
-      // Simpan salinan ke cache lokal agar tetap bisa diakses saat offline
-      simpanDaftarRiwayatLokal(json.data);
-      return {
-        data: json.data,
-        status: 'terhubung_neon',
-      };
-    }
-
-    return {
-      data: ambilDaftarRiwayatLokal(),
-      status: 'mode_lokal',
-      pesan: json.pesan || 'Koneksi ke Neon tidak berhasil',
-    };
-  } catch (error) {
-    console.warn('Gagal menghubungi /api/forms, beralih ke mode lokal:', error);
-    return {
-      data: ambilDaftarRiwayatLokal(),
-      status: 'mode_lokal',
-      pesan: 'Mode offline: data disimpan di memori peramban',
-    };
+  } catch {
+    // Abaikan jika /api/forms tidak ada (seperti di GitHub Pages)
   }
+
+  // B. Jalur Direct Browser Client (Bekerja 100% di GitHub Pages!)
+  const connStr = ambilConnectionStringNeon();
+  if (connStr && connStr.startsWith('postgres')) {
+    try {
+      const dataNeon = await ambilRiwayatLangsungNeon();
+      if (Array.isArray(dataNeon)) {
+        simpanDaftarRiwayatLokal(dataNeon);
+        return { data: dataNeon, status: 'terhubung_neon' };
+      }
+    } catch (err: any) {
+      console.warn('Gagal koneksi langsung ke Neon via browser:', err);
+    }
+  }
+
+  // C. Fallback ke penyimpanan lokal peramban
+  return {
+    data: ambilDaftarRiwayatLokal(),
+    status: 'mode_lokal',
+    pesan: 'Berjalan di mode penyimpanan lokal peramban',
+  };
 }
 
 /**
@@ -134,7 +145,6 @@ export async function catatFormulirBaru(
     daftarBaru = [itemBaru, ...riwayatSaatIni];
   }
 
-  // Pangkas entri berlebih jika melebihi kuota 50
   if (daftarBaru.length > BATAS_MAKSIMAL_RIWAYAT) {
     const itemDipin = daftarBaru.filter((i) => i.isPinned);
     const itemBiasa = daftarBaru.filter((i) => !i.isPinned);
@@ -144,7 +154,7 @@ export async function catatFormulirBaru(
 
   simpanDaftarRiwayatLokal(daftarBaru);
 
-  // Kirim secara asinkron ke Neon DB
+  // Kirim ke Neon DB: Coba /api/forms terlebih dahulu, jika gagal coba direct client
   let tersimpanDiNeon = false;
   try {
     const res = await fetch('/api/forms', {
@@ -157,9 +167,23 @@ export async function catatFormulirBaru(
       if (json.sukses && json.data) {
         tersimpanDiNeon = true;
       }
+    } else {
+      throw new Error('API forms not available');
     }
-  } catch (err) {
-    console.warn('Gagal sinkronisasi POST ke Neon DB:', err);
+  } catch {
+    // Coba direct browser client (untuk GitHub Pages)
+    try {
+      const hasilDirect = await simpanFormulirLangsungNeon({
+        ...config,
+        labelFormulir: labelFinal,
+        tagKategori: tagFinal,
+      });
+      if (hasilDirect) {
+        tersimpanDiNeon = true;
+      }
+    } catch (errDirect) {
+      console.warn('Gagal simpan langsung ke Neon via browser:', errDirect);
+    }
   }
 
   return { daftarDiperbarui: daftarBaru, tersimpanDiNeon };
@@ -181,12 +205,14 @@ export async function togglePinRiwayat(id: string): Promise<ItemRiwayatFormulir[
 
   simpanDaftarRiwayatLokal(diperbarui);
 
-  // Kirim perubahan ke Neon DB
   fetch('/api/forms', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id, isPinned: pinBaru }),
-  }).catch((err) => console.warn('Gagal patch pin ke Neon:', err));
+  }).catch(() => {
+    // Fallback direct browser client
+    ubahPinLangsungNeon(id, pinBaru).catch(() => {});
+  });
 
   return diperbarui;
 }
@@ -199,10 +225,12 @@ export async function hapusItemRiwayat(id: string): Promise<ItemRiwayatFormulir[
   const diperbarui = riwayat.filter((item) => item.id !== id);
   simpanDaftarRiwayatLokal(diperbarui);
 
-  // Kirim penghapusan ke Neon DB
   fetch(`/api/forms?id=${encodeURIComponent(id)}`, {
     method: 'DELETE',
-  }).catch((err) => console.warn('Gagal hapus item di Neon:', err));
+  }).catch(() => {
+    // Fallback direct browser client
+    hapusItemLangsungNeon(id).catch(() => {});
+  });
 
   return diperbarui;
 }
@@ -213,10 +241,12 @@ export async function hapusItemRiwayat(id: string): Promise<ItemRiwayatFormulir[
 export async function bersihkanSemuaRiwayat(): Promise<ItemRiwayatFormulir[]> {
   localStorage.removeItem(KUNCI_STORAGE);
 
-  // Kirim pembersihan ke Neon DB
   fetch('/api/forms?hapusSemua=true', {
     method: 'DELETE',
-  }).catch((err) => console.warn('Gagal truncate tabel Neon:', err));
+  }).catch(() => {
+    // Fallback direct browser client
+    bersihkanSemuaLangsungNeon().catch(() => {});
+  });
 
   return [];
 }

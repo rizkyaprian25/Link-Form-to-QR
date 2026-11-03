@@ -1,6 +1,10 @@
-import { Database, X, CheckCircle2, AlertCircle, Copy, Check, ExternalLink } from 'lucide-react';
+import { Database, X, CheckCircle2, AlertCircle, Save, Check } from 'lucide-react';
 import { useState } from 'react';
 import { StatusDatabase } from '../features/generator/services/storageService';
+import {
+  ambilConnectionStringNeon,
+  simpanConnectionStringNeon,
+} from '../features/generator/services/neonClient';
 
 interface DatabaseModalProps {
   statusDatabase: StatusDatabase;
@@ -9,18 +13,18 @@ interface DatabaseModalProps {
 }
 
 /**
- * Modal Informasi & Panduan Koneksi Neon Database
- * Membantu pengguna menghubungkan string koneksi Neon PostgreSQL ke dalam proyek.
+ * Modal Informasi & Pengaturan Koneksi Neon Database
+ * Memungkinkan pengguna menghubungkan database Neon langsung dari browser (tanpa perlu Vercel atau backend).
  */
 export function DatabaseModal({ statusDatabase, onTutup, onCekUlang }: DatabaseModalProps) {
-  const [tersalin, setTersalin] = useState(false);
+  const [inputUrl, setInputUrl] = useState(() => ambilConnectionStringNeon());
+  const [tersimpanNotif, setTersimpanNotif] = useState(false);
 
-  const contohEnv = `DATABASE_URL="postgresql://user:password@ep-xyz.us-east-2.aws.neon.tech/neondb?sslmode=require"`;
-
-  const handleSalinEnv = () => {
-    navigator.clipboard.writeText(contohEnv);
-    setTersalin(true);
-    setTimeout(() => setTersalin(false), 2000);
+  const handleSimpanKoneksi = () => {
+    simpanConnectionStringNeon(inputUrl);
+    setTersimpanNotif(true);
+    setTimeout(() => setTersimpanNotif(false), 2000);
+    onCekUlang();
   };
 
   return (
@@ -31,7 +35,7 @@ export function DatabaseModal({ statusDatabase, onTutup, onCekUlang }: DatabaseM
           <div className="flex items-center gap-2">
             <Database className="w-5 h-5 text-accent" />
             <h3 className="text-base font-semibold text-foreground tracking-tight">
-              Status Koneksi Neon Database
+              Koneksi Neon Database (Bisa Tanpa Vercel)
             </h3>
           </div>
           <button
@@ -59,77 +63,60 @@ export function DatabaseModal({ statusDatabase, onTutup, onCekUlang }: DatabaseM
           <div className="text-xs space-y-1">
             <div className="font-semibold text-sm">
               {statusDatabase === 'terhubung_neon'
-                ? 'Terhubung ke Neon PostgreSQL'
-                : 'Berjalan di Mode Lokal (Offline Cache)'}
+                ? 'Terhubung ke Neon PostgreSQL Cloud'
+                : 'Berjalan di Mode Lokal (Offline)'}
             </div>
             <p className="leading-relaxed opacity-90">
               {statusDatabase === 'terhubung_neon'
-                ? 'Seluruh riwayat formulir dan konfigurasi QR Anda disinkronkan secara aman ke database Neon PostgreSQL Anda. Data dapat diakses antar perangkat.'
-                : 'Aplikasi saat ini menyimpan riwayat formulir di browser lokal. Untuk menyimpan permanen di Neon Cloud, masukkan DATABASE_URL ke berkas .env Anda.'}
+                ? 'Seluruh riwayat kode QR tersimpan langsung di database Neon PostgreSQL Anda. Data dapat diakses kapan saja dan tidak akan hilang.'
+                : 'Aplikasi saat ini hanya menyimpan data di peramban ini. Masukkan connection string Neon Anda di bawah untuk mengaktifkan sinkronisasi cloud.'}
             </p>
           </div>
         </div>
 
-        {/* Panduan 3 Langkah Menghubungkan Neon */}
-        <div className="space-y-3 text-xs">
-          <h4 className="font-semibold text-foreground flex items-center justify-between">
-            <span>Cara Menghubungkan Database Neon Anda:</span>
-            <a
-              href="https://console.neon.tech"
-              target="_blank"
-              rel="noreferrer noopener"
-              className="text-accent hover:underline flex items-center gap-1 font-normal text-[11px]"
-            >
-              Buka Neon Console <ExternalLink className="w-3 h-3" />
-            </a>
-          </h4>
-
-          <ol className="list-decimal list-inside space-y-2 text-muted-foreground leading-relaxed">
-            <li>
-              Buat akun atau buka proyek di <strong className="text-foreground">console.neon.tech</strong>.
-            </li>
-            <li>
-              Salin <strong className="text-foreground">Connection String</strong> PostgreSQL Anda (pilih mode <em>Pooled connection</em> atau <em>Direct</em>).
-            </li>
-            <li>
-              Tempelkan ke dalam file <strong className="text-foreground">.env</strong> di root proyek ini:
-            </li>
-          </ol>
-
-          {/* Code Snippet Box */}
-          <div className="relative bg-muted/80 border border-border rounded p-3 font-mono text-[11px] text-foreground select-all break-all">
-            <code>{contohEnv}</code>
-            <button
-              type="button"
-              onClick={handleSalinEnv}
-              title="Salin contoh konfigurasi"
-              className="absolute top-2 right-2 p-1 text-muted-foreground hover:text-foreground bg-card border border-border rounded transition-colors"
-            >
-              {tersalin ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
-            </button>
+        {/* Input String Koneksi Neon Langsung */}
+        <div className="space-y-2">
+          <label htmlFor="neon-url-input" className="block text-xs font-semibold text-foreground">
+            Connection String Neon Database Anda:
+          </label>
+          <div className="space-y-1.5">
+            <input
+              id="neon-url-input"
+              type="text"
+              value={inputUrl}
+              onChange={(e) => setInputUrl(e.target.value)}
+              placeholder="postgresql://username:password@ep-xyz.us-east-2.aws.neon.tech/neondb?sslmode=require"
+              className="w-full px-3 py-2 text-xs font-mono rounded border border-border bg-card text-foreground focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              spellCheck="false"
+            />
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Koneksi ini berjalan langsung dari peramban Anda ke serverless Neon via protokol HTTP aman (*Zero-Backend Direct Client*), sehingga <strong>bisa berjalan di GitHub Pages tanpa Vercel</strong>!
+            </p>
           </div>
-
-          <p className="text-[11px] text-muted-foreground">
-            Tabel <code className="text-accent font-semibold">form_qrs</code> dan indeks database akan dibuat secara otomatis saat pertama kali terhubung.
-          </p>
         </div>
 
         {/* Footer Tombol Aksi */}
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
-          <button
-            type="button"
-            onClick={onCekUlang}
-            className="px-4 py-2 bg-accent text-accent-foreground rounded text-xs font-semibold hover:bg-accent-hover transition-colors"
-          >
-            Uji Ulang Koneksi
-          </button>
-          <button
-            type="button"
-            onClick={onTutup}
-            className="px-4 py-2 border border-border text-foreground rounded text-xs font-medium hover:bg-muted transition-colors"
-          >
-            Tutup
-          </button>
+        <div className="flex items-center justify-between pt-3 border-t border-border/60">
+          <div className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+            {tersimpanNotif ? '✓ Pengaturan Disimpan & Menguji...' : ''}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSimpanKoneksi}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-accent text-accent-foreground rounded text-xs font-semibold hover:bg-accent-hover transition-colors shadow-xs"
+            >
+              {tersimpanNotif ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+              <span>Simpan &amp; Hubungkan</span>
+            </button>
+            <button
+              type="button"
+              onClick={onTutup}
+              className="px-4 py-2 border border-border text-foreground rounded text-xs font-medium hover:bg-muted transition-colors"
+            >
+              Tutup
+            </button>
+          </div>
         </div>
       </div>
     </div>
