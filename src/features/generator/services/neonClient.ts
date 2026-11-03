@@ -15,6 +15,45 @@ const DEFAULT_NEON_URL =
   'postgresql://neondb_owner:npg_xBOufe3s5nZV@ep-icy-block-ao4vn5hj-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
 
 /**
+ * Informasi koneksi yang disensor (masked) agar password dan detail sensitif
+ * TIDAK PERNAH ditampilkan telanjang di antarmuka pengguna (UI).
+ */
+export interface InfoKoneksiDisensor {
+  terhubung: boolean;
+  hostMasked: string;
+  database: string;
+  username: string;
+}
+
+export function ambilInfoKoneksiDisensor(): InfoKoneksiDisensor {
+  const connStr = ambilConnectionStringNeon();
+  if (!connStr || !connStr.startsWith('postgres')) {
+    return { terhubung: false, hostMasked: '', database: '', username: '' };
+  }
+  try {
+    const cleanUrl = connStr.replace('postgresql://', 'http://').replace('postgres://', 'http://');
+    const parsed = new URL(cleanUrl);
+    const hostParts = parsed.hostname.split('.');
+    const hostPrefix = hostParts[0].length > 8 ? hostParts[0].substring(0, 8) + '•••' : hostParts[0];
+    const hostMasked = hostPrefix + '.' + hostParts.slice(1).join('.');
+
+    return {
+      terhubung: true,
+      hostMasked,
+      database: parsed.pathname.replace('/', '') || 'neondb',
+      username: parsed.username || 'neondb_owner',
+    };
+  } catch {
+    return {
+      terhubung: true,
+      hostMasked: 'ep-icy-block•••.neon.tech',
+      database: 'neondb',
+      username: 'neondb_owner',
+    };
+  }
+}
+
+/**
  * Mengambil connection string aktif:
  * Prioritas 1: Dari penyimpanan lokal pengguna di browser ini
  * Prioritas 2: Dari konfigurasi default

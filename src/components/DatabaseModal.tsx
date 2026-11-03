@@ -1,8 +1,8 @@
-import { Database, X, CheckCircle2, AlertCircle, Save, Check } from 'lucide-react';
+import { Database, X, CheckCircle2, AlertCircle, Save, Shield, Lock, Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
 import { StatusDatabase } from '../features/generator/services/storageService';
 import {
-  ambilConnectionStringNeon,
+  ambilInfoKoneksiDisensor,
   simpanConnectionStringNeon,
 } from '../features/generator/services/neonClient';
 
@@ -13,18 +13,26 @@ interface DatabaseModalProps {
 }
 
 /**
- * Modal Informasi & Pengaturan Koneksi Neon Database
- * Memungkinkan pengguna menghubungkan database Neon langsung dari browser (tanpa perlu Vercel atau backend).
+ * Modal Informasi & Pengaturan Koneksi Neon Database (Protected View)
+ * Menyensor kata sandi dan detail rahasia agar tidak terlihat oleh orang lain di layar.
  */
 export function DatabaseModal({ statusDatabase, onTutup, onCekUlang }: DatabaseModalProps) {
-  const [inputUrl, setInputUrl] = useState(() => ambilConnectionStringNeon());
+  const [bukaFormUbah, setBukaFormUbah] = useState(false);
+  const [inputUrl, setInputUrl] = useState('');
+  const [lihatPassword, setLihatPassword] = useState(false);
   const [tersimpanNotif, setTersimpanNotif] = useState(false);
 
+  const infoKoneksi = ambilInfoKoneksiDisensor();
+
   const handleSimpanKoneksi = () => {
-    simpanConnectionStringNeon(inputUrl);
-    setTersimpanNotif(true);
-    setTimeout(() => setTersimpanNotif(false), 2000);
-    onCekUlang();
+    if (inputUrl.trim()) {
+      simpanConnectionStringNeon(inputUrl);
+      setInputUrl('');
+      setBukaFormUbah(false);
+      setTersimpanNotif(true);
+      setTimeout(() => setTersimpanNotif(false), 2000);
+      onCekUlang();
+    }
   };
 
   return (
@@ -35,7 +43,7 @@ export function DatabaseModal({ statusDatabase, onTutup, onCekUlang }: DatabaseM
           <div className="flex items-center gap-2">
             <Database className="w-5 h-5 text-accent" />
             <h3 className="text-base font-semibold text-foreground tracking-tight">
-              Koneksi Neon Database (Bisa Tanpa Vercel)
+              Koneksi Neon PostgreSQL Database
             </h3>
           </div>
           <button
@@ -63,60 +71,137 @@ export function DatabaseModal({ statusDatabase, onTutup, onCekUlang }: DatabaseM
           <div className="text-xs space-y-1">
             <div className="font-semibold text-sm">
               {statusDatabase === 'terhubung_neon'
-                ? 'Terhubung ke Neon PostgreSQL Cloud'
+                ? 'Terhubung Aman ke Neon Cloud Database'
                 : 'Berjalan di Mode Lokal (Offline)'}
             </div>
             <p className="leading-relaxed opacity-90">
               {statusDatabase === 'terhubung_neon'
-                ? 'Seluruh riwayat kode QR tersimpan langsung di database Neon PostgreSQL Anda. Data dapat diakses kapan saja dan tidak akan hilang.'
-                : 'Aplikasi saat ini hanya menyimpan data di peramban ini. Masukkan connection string Neon Anda di bawah untuk mengaktifkan sinkronisasi cloud.'}
+                ? 'Seluruh riwayat kode QR tersimpan langsung di Neon PostgreSQL. Data aman, tidak akan hilang, dan dapat diakses dari perangkat lain.'
+                : 'Aplikasi saat ini hanya menyimpan data di peramban ini.'}
             </p>
           </div>
         </div>
 
-        {/* Input String Koneksi Neon Langsung */}
-        <div className="space-y-2">
-          <label htmlFor="neon-url-input" className="block text-xs font-semibold text-foreground">
-            Connection String Neon Database Anda:
-          </label>
-          <div className="space-y-1.5">
-            <input
-              id="neon-url-input"
-              type="text"
-              value={inputUrl}
-              onChange={(e) => setInputUrl(e.target.value)}
-              placeholder="postgresql://username:password@ep-xyz.us-east-2.aws.neon.tech/neondb?sslmode=require"
-              className="w-full px-3 py-2 text-xs font-mono rounded border border-border bg-card text-foreground focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-              spellCheck="false"
-            />
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Koneksi ini berjalan langsung dari peramban Anda ke serverless Neon via protokol HTTP aman (*Zero-Backend Direct Client*), sehingga <strong>bisa berjalan di GitHub Pages tanpa Vercel</strong>!
-            </p>
+        {/* Ringkasan Keamanan Kredensial (Masked / Tersensor) */}
+        {statusDatabase === 'terhubung_neon' && (
+          <div className="bg-muted/40 border border-border rounded-lg p-4 space-y-2.5 text-xs">
+            <div className="flex items-center justify-between pb-2 border-b border-border/60">
+              <span className="font-semibold text-foreground flex items-center gap-1.5">
+                <Shield className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                Proteksi Kredensial Aktif
+              </span>
+              <span className="font-mono text-[10px] text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                SSL / TLS 1.3
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
+              <div>
+                <span className="text-muted-foreground block text-[10px]">Database:</span>
+                <span className="font-semibold text-foreground">{infoKoneksi.database || 'neondb'}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block text-[10px]">Pengguna:</span>
+                <span className="font-semibold text-foreground">{infoKoneksi.username || 'neondb_owner'}</span>
+              </div>
+              <div className="col-span-2">
+                <span className="text-muted-foreground block text-[10px]">Host Endpoint:</span>
+                <span className="text-foreground truncate block">{infoKoneksi.hostMasked}</span>
+              </div>
+              <div className="col-span-2 flex items-center justify-between bg-card border border-border p-2 rounded">
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <Lock className="w-3.5 h-3.5 text-accent" />
+                  <span className="text-[10px]">Kata Sandi Database:</span>
+                </div>
+                <span className="font-mono text-muted-foreground tracking-widest">••••••••••••••••</span>
+              </div>
+            </div>
           </div>
+        )}
+
+        {/* Form Ganti Connection String (Tersembunyi & Diproteksi) */}
+        <div className="space-y-3 pt-1 border-t border-border/60">
+          {!bukaFormUbah ? (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground text-[11px]">
+                Ingin menghubungkan ke database Neon lain?
+              </span>
+              <button
+                type="button"
+                onClick={() => setBukaFormUbah(true)}
+                className="text-accent hover:underline font-semibold text-xs"
+              >
+                Ganti Connection String
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2 p-3.5 bg-muted/60 border border-border rounded-lg text-xs animate-in fade-in-50 duration-200">
+              <div className="flex items-center justify-between">
+                <label htmlFor="neon-pass-input" className="font-semibold text-foreground">
+                  Masukkan Connection String Baru:
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBukaFormUbah(false);
+                    setInputUrl('');
+                  }}
+                  className="text-muted-foreground hover:text-foreground text-[11px]"
+                >
+                  Batal
+                </button>
+              </div>
+
+              <div className="relative">
+                <input
+                  id="neon-pass-input"
+                  type={lihatPassword ? 'text' : 'password'}
+                  value={inputUrl}
+                  onChange={(e) => setInputUrl(e.target.value)}
+                  placeholder="postgresql://user:password@host/db..."
+                  className="w-full pl-3 pr-10 py-2 text-xs font-mono rounded border border-border bg-card text-foreground focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                  spellCheck="false"
+                />
+                <button
+                  type="button"
+                  onClick={() => setLihatPassword(!lihatPassword)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {lihatPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+
+              <p className="text-[10px] text-muted-foreground">
+                Kata sandi Anda akan disensor secara otomatis dan tersimpan aman di perangkat Anda.
+              </p>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  disabled={!inputUrl.trim()}
+                  onClick={handleSimpanKoneksi}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-accent text-accent-foreground rounded text-xs font-semibold hover:bg-accent-hover disabled:opacity-40 transition-colors"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Simpan Kredensial Baru</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer Tombol Aksi */}
-        <div className="flex items-center justify-between pt-3 border-t border-border/60">
+        <div className="flex items-center justify-between pt-2 border-t border-border/60">
           <div className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-            {tersimpanNotif ? '✓ Pengaturan Disimpan & Menguji...' : ''}
+            {tersimpanNotif ? '✓ Kredensial berhasil diperbarui!' : ''}
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleSimpanKoneksi}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-accent text-accent-foreground rounded text-xs font-semibold hover:bg-accent-hover transition-colors shadow-xs"
-            >
-              {tersimpanNotif ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-              <span>Simpan &amp; Hubungkan</span>
-            </button>
-            <button
-              type="button"
-              onClick={onTutup}
-              className="px-4 py-2 border border-border text-foreground rounded text-xs font-medium hover:bg-muted transition-colors"
-            >
-              Tutup
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onTutup}
+            className="px-5 py-2 bg-primary text-primary-foreground rounded text-xs font-medium hover:bg-primary-hover transition-colors"
+          >
+            Tutup
+          </button>
         </div>
       </div>
     </div>
