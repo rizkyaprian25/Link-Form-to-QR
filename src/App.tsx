@@ -6,15 +6,18 @@ import { PreviewCanvas } from './features/generator/components/PreviewCanvas';
 import { ExportSuite } from './features/generator/components/ExportSuite';
 import { HistoryShelf } from './features/generator/components/HistoryShelf';
 import { PrintFlyerSheet } from './features/generator/components/PrintFlyerSheet';
+import { DatabaseModal } from './components/DatabaseModal';
 import { KonfigurasiQR, ItemRiwayatFormulir, PresetTemplatForm } from './contracts/formqr';
 import { prosesUrlGoogleForm } from './features/generator/services/urlParser';
 import { buatQrCodeSvg } from './features/generator/services/qrEngine';
 import {
-  ambilDaftarRiwayat,
+  ambilDaftarRiwayatLokal,
+  sinkronkanDenganNeon,
   catatFormulirBaru,
   togglePinRiwayat,
   hapusItemRiwayat,
   bersihkanSemuaRiwayat,
+  StatusDatabase,
 } from './features/generator/services/storageService';
 
 // Konfigurasi default studio
@@ -35,14 +38,16 @@ const KONFIGURASI_AWAL: KonfigurasiQR = {
 
 /**
  * Komponen Induk Aplikasi FormQR Studio
- * Mengatur orkestrasi partisi state (URL, Konfigurasi, Matriks SVG, dan Penyimpanan Riwayat).
+ * Mengatur orkestrasi partisi state (URL, Konfigurasi, Matriks SVG, dan Penyimpanan Neon DB / Lokal).
  */
 export function App() {
   const [urlInput, setUrlInput] = useState<string>(KONFIGURASI_AWAL.urlAsli);
   const [config, setConfig] = useState<KonfigurasiQR>(KONFIGURASI_AWAL);
   const [svgContent, setSvgContent] = useState<string>('');
   const [daftarRiwayat, setDaftarRiwayat] = useState<ItemRiwayatFormulir[]>([]);
+  const [statusDatabase, setStatusDatabase] = useState<StatusDatabase>('sedang_sinkron');
   const [modeCetakTerbuka, setModeCetakTerbuka] = useState<boolean>(false);
+  const [infoDatabaseTerbuka, setInfoDatabaseTerbuka] = useState<boolean>(false);
   const [, startTransition] = useTransition();
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -50,10 +55,17 @@ export function App() {
   // 1. Evaluasi & normalisasi URL saat masukan berubah
   const hasilValidasi = prosesUrlGoogleForm(urlInput);
 
-  // 2. Inisialisasi daftar riwayat dari penyimpanan lokal saat aplikasi dibuka
+  // 2. Muat data awal dari cache lokal lalu sinkronkan dengan Neon DB
   useEffect(() => {
-    const riwayatTersimpan = ambilDaftarRiwayat();
-    setDaftarRiwayat(riwayatTersimpan);
+    // Tampilkan cache lokal seketika (< 5ms)
+    const lokal = ambilDaftarRiwayatLokal();
+    setDaftarRiwayat(lokal);
+
+    // Sinkronisasi dengan database Neon secara asinkron
+    sinkronkanDenganNeon().then((res) => {
+      setDaftarRiwayat(res.data);
+      setStatusDatabase(res.status);
+    });
   }, []);
 
   // 3. Sinkronisasi URL hasil normalisasi ke konfigurasi aktif
@@ -104,21 +116,35 @@ export function App() {
   const handlePilihRiwayat = (item: ItemRiwayatFormulir) => {
     setUrlInput(item.urlTervalidasi);
     setConfig(item.konfigurasi);
-    // Scroll mulus ke atas
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Handler pencatatan saat ekspor sukses
-  const handleEksporSukses = () => {
-    const diperbarui = catatFormulirBaru(config);
-    setDaftarRiwayat(diperbarui);
+  // Handler pencatatan saat ekspor sukses (Simpan ke Neon DB & LocalStorage)
+  const handleEksporSukses = async () => {
+    const hasil = await catatFormulirBaru(config);
+    setDaftarRiwayat(hasil.daftarDiperbarui);
+    if (hasil.tersimpanDiNeon) {
+      setStatusDatabase('terhubung_neon');
+    }
+  };
+
+  // Handler periksa ulang koneksi Neon DB
+  const handleCekUlangDatabase = async () => {
+    setStatusDatabase('sedang_sinkron');
+    const res = await sinkronkanDenganNeon();
+    setDaftarRiwayat(res.data);
+    setStatusDatabase(res.status);
   };
 
   return (
-    <AppShell totalTersimpan={daftarRiwayat.length}>
+    <AppShell
+      totalTersimpan={daftarRiwayat.length}
+      statusDatabase={statusDatabase}
+      onBukaInfoDatabase={() => setInfoDatabaseTerbuka(true)}
+    >
       {/* Workspace Asimetris 2-Kolom (Gaya Swiss Studio) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Kolom Kiri: Generator Console & Customizer (7 Kolom pada Desktop) */}
+        {/* Kolom Kiri: Generator Console & Customizer */}
         <div className="lg:col-span-7 space-y-6">
           <InputSection
             urlInput={urlInput}
@@ -133,7 +159,7 @@ export function App() {
           <CustomizerPanel config={config} onChangeConfig={handleChangeConfig} />
         </div>
 
-        {/* Kolom Kanan: Proofing Staging Canvas & Export Suite (5 Kolom pada Desktop) */}
+        {/* Kolom Kanan: Proofing Staging Canvas & Export Suite */}
         <div className="lg:col-span-5 space-y-6 sticky top-20">
           <PreviewCanvas
             config={config}
@@ -157,17 +183,35 @@ export function App() {
       <HistoryShelf
         daftarRiwayat={daftarRiwayat}
         onPilihRiwayat={handlePilihRiwayat}
-        onTogglePin={(id) => setDaftarRiwayat(togglePinRiwayat(id))}
-        onHapusItem={(id) => setDaftarRiwayat(hapusItemRiwayat(id))}
-        onBersihkanSemua={() => setDaftarRiwayat(bersihkanSemuaRiwayat())}
+        onTogglePin={async (id) => {
+          const res = await togglePinRiwayat(id);
+          setDaftarRiwayat(res);
+        }}
+        onHapusItem={async (id) => {
+          const res = await hapusItemRiwayat(id);
+          setDaftarRiwayat(res);
+        }}
+        onBersihkanSemua={async () => {
+          const res = await bersihkanSemuaRiwayat();
+          setDaftarRiwayat(res);
+        }}
       />
 
-      {/* Lembar Modal / Cetak Flyer Meja */}
+      {/* Modal Lembar Cetak Flyer Meja */}
       {modeCetakTerbuka && (
         <PrintFlyerSheet
           config={config}
           svgContent={svgContent}
           onTutup={() => setModeCetakTerbuka(false)}
+        />
+      )}
+
+      {/* Modal Informasi Status Neon Database */}
+      {infoDatabaseTerbuka && (
+        <DatabaseModal
+          statusDatabase={statusDatabase}
+          onTutup={() => setInfoDatabaseTerbuka(false)}
+          onCekUlang={handleCekUlangDatabase}
         />
       )}
     </AppShell>

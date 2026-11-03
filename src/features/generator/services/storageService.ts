@@ -1,6 +1,7 @@
 /**
- * FormQR Studio - Layanan Penyimpanan Lokal (Local Storage & LRU Retention)
- * Menyimpan data riwayat formulir di browser pengguna secara persisten tanpa mengirimkan data ke cloud.
+ * FormQR Studio - Layanan Sinkronisasi Database Neon PostgreSQL & Penyimpanan Lokal
+ * Menerapkan pola Offline-First & Realtime Cloud Sync:
+ * Data dimuat seketika dari cache lokal dan disinkronkan secara mulus ke database Neon PostgreSQL.
  */
 
 import { ItemRiwayatFormulir, KonfigurasiQR } from '../../../contracts/formqr';
@@ -10,66 +11,100 @@ import { MOCK_RIWAYAT_AWAL } from '../../../mock/mockForms';
 const KUNCI_STORAGE = 'formqr_studio_history_v1';
 const BATAS_MAKSIMAL_RIWAYAT = 50;
 
+export type StatusDatabase = 'terhubung_neon' | 'mode_lokal' | 'sedang_sinkron';
+
 /**
- * Mengambil daftar riwayat formulir dari localStorage.
- * Jika penyimpanan masih kosong, inisialisasi dengan data templat awal.
+ * 1. Mengambil data dari localStorage untuk rendering instan (< 5ms)
  */
-export function ambilDaftarRiwayat(): ItemRiwayatFormulir[] {
+export function ambilDaftarRiwayatLokal(): ItemRiwayatFormulir[] {
   try {
     const dataMentah = localStorage.getItem(KUNCI_STORAGE);
     if (!dataMentah) {
-      // Inisialisasi awal dengan mock data edukatif
-      simpanDaftarRiwayat(MOCK_RIWAYAT_AWAL);
+      simpanDaftarRiwayatLokal(MOCK_RIWAYAT_AWAL);
       return MOCK_RIWAYAT_AWAL;
     }
 
     const parsed = JSON.parse(dataMentah);
     const validasi = SkemaDaftarRiwayat.safeParse(parsed);
 
-    if (validasi.success) {
-      return validasi.data;
-    } else {
-      console.warn('Format data penyimpanan lokal tidak valid, mengembalikan fallback.');
-      return MOCK_RIWAYAT_AWAL;
-    }
+    return validasi.success ? validasi.data : MOCK_RIWAYAT_AWAL;
   } catch (error) {
-    console.error('Gagal membaca localStorage:', error);
+    console.error('Gagal membaca cache lokal:', error);
     return MOCK_RIWAYAT_AWAL;
   }
 }
 
 /**
- * Menyimpan daftar riwayat ke localStorage.
+ * Menyimpan data ke localStorage
  */
-export function simpanDaftarRiwayat(daftar: ItemRiwayatFormulir[]): void {
+export function simpanDaftarRiwayatLokal(daftar: ItemRiwayatFormulir[]): void {
   try {
     localStorage.setItem(KUNCI_STORAGE, JSON.stringify(daftar));
   } catch (error) {
-    console.error('Gagal menulis ke localStorage:', error);
+    console.error('Gagal menulis ke cache lokal:', error);
   }
 }
 
 /**
- * Menambahkan atau memperbarui entitas formulir ke dalam riwayat.
- * Menerapkan algoritma pembersihan LRU (Least Recently Used) saat melebihi batas 50 item.
+ * 2. Mengambil riwayat dari Neon DB melalui endpoint /api/forms
  */
-export function catatFormulirBaru(
+export async function sinkronkanDenganNeon(): Promise<{
+  data: ItemRiwayatFormulir[];
+  status: StatusDatabase;
+  pesan?: string;
+}> {
+  try {
+    const res = await fetch('/api/forms');
+    if (!res.ok) {
+      return {
+        data: ambilDaftarRiwayatLokal(),
+        status: 'mode_lokal',
+        pesan: 'Database Neon belum aktif atau belum dikonfigurasi di .env',
+      };
+    }
+
+    const json = await res.json();
+    if (json.sukses && Array.isArray(json.data)) {
+      // Simpan salinan ke cache lokal agar tetap bisa diakses saat offline
+      simpanDaftarRiwayatLokal(json.data);
+      return {
+        data: json.data,
+        status: 'terhubung_neon',
+      };
+    }
+
+    return {
+      data: ambilDaftarRiwayatLokal(),
+      status: 'mode_lokal',
+      pesan: json.pesan || 'Koneksi ke Neon tidak berhasil',
+    };
+  } catch (error) {
+    console.warn('Gagal menghubungi /api/forms, beralih ke mode lokal:', error);
+    return {
+      data: ambilDaftarRiwayatLokal(),
+      status: 'mode_lokal',
+      pesan: 'Mode offline: data disimpan di memori peramban',
+    };
+  }
+}
+
+/**
+ * 3. Menambahkan atau memperbarui formulir (Disimpan ke LocalStorage + Neon DB)
+ */
+export async function catatFormulirBaru(
   config: KonfigurasiQR,
   labelKustom?: string,
   tagKustom?: string
-): ItemRiwayatFormulir[] {
-  const riwayatSaatIni = ambilDaftarRiwayat();
+): Promise<{ daftarDiperbarui: ItemRiwayatFormulir[]; tersimpanDiNeon: boolean }> {
+  const riwayatSaatIni = ambilDaftarRiwayatLokal();
   const urlTervalidasi = config.urlTervalidasi || config.urlAsli;
   const labelFinal = labelKustom || config.labelFormulir || 'Formulir Google';
   const tagFinal = tagKustom || config.tagKategori || 'Umum';
 
-  // Periksa apakah URL ini sudah pernah dibuat sebelumnya
   const indeksAda = riwayatSaatIni.findIndex((item) => item.urlTervalidasi === urlTervalidasi);
-
   let daftarBaru: ItemRiwayatFormulir[];
 
   if (indeksAda !== -1) {
-    // Perbarui entri yang sudah ada dan pindahkan ke posisi teratas
     const itemAda = riwayatSaatIni[indeksAda];
     const itemDiperbarui: ItemRiwayatFormulir = {
       ...itemAda,
@@ -85,7 +120,6 @@ export function catatFormulirBaru(
       ...riwayatSaatIni.slice(indeksAda + 1),
     ];
   } else {
-    // Buat entitas baru
     const itemBaru: ItemRiwayatFormulir = {
       id: crypto.randomUUID ? crypto.randomUUID() : `form-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       label: labelFinal,
@@ -100,7 +134,7 @@ export function catatFormulirBaru(
     daftarBaru = [itemBaru, ...riwayatSaatIni];
   }
 
-  // Pangkas entri berlebih jika melewati batas maksimal (jangan hapus yang di-pin)
+  // Pangkas entri berlebih jika melebihi kuota 50
   if (daftarBaru.length > BATAS_MAKSIMAL_RIWAYAT) {
     const itemDipin = daftarBaru.filter((i) => i.isPinned);
     const itemBiasa = daftarBaru.filter((i) => !i.isPinned);
@@ -108,36 +142,81 @@ export function catatFormulirBaru(
     daftarBaru = [...itemDipin, ...itemBiasa.slice(0, kuotaTersisa)];
   }
 
-  simpanDaftarRiwayat(daftarBaru);
-  return daftarBaru;
+  simpanDaftarRiwayatLokal(daftarBaru);
+
+  // Kirim secara asinkron ke Neon DB
+  let tersimpanDiNeon = false;
+  try {
+    const res = await fetch('/api/forms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...config, labelFormulir: labelFinal, tagKategori: tagFinal }),
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.sukses && json.data) {
+        tersimpanDiNeon = true;
+      }
+    }
+  } catch (err) {
+    console.warn('Gagal sinkronisasi POST ke Neon DB:', err);
+  }
+
+  return { daftarDiperbarui: daftarBaru, tersimpanDiNeon };
 }
 
 /**
- * Mengubah status pin / bintang pada entri riwayat.
+ * 4. Mengubah status pin / favorit formulir
  */
-export function togglePinRiwayat(id: string): ItemRiwayatFormulir[] {
-  const riwayat = ambilDaftarRiwayat();
-  const diperbarui = riwayat.map((item) =>
-    item.id === id ? { ...item, isPinned: !item.isPinned } : item
-  );
-  simpanDaftarRiwayat(diperbarui);
+export async function togglePinRiwayat(id: string): Promise<ItemRiwayatFormulir[]> {
+  const riwayat = ambilDaftarRiwayatLokal();
+  let pinBaru = false;
+  const diperbarui = riwayat.map((item) => {
+    if (item.id === id) {
+      pinBaru = !item.isPinned;
+      return { ...item, isPinned: pinBaru };
+    }
+    return item;
+  });
+
+  simpanDaftarRiwayatLokal(diperbarui);
+
+  // Kirim perubahan ke Neon DB
+  fetch('/api/forms', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, isPinned: pinBaru }),
+  }).catch((err) => console.warn('Gagal patch pin ke Neon:', err));
+
   return diperbarui;
 }
 
 /**
- * Menghapus satu entri riwayat berdasarkan ID.
+ * 5. Menghapus satu formulir berdasarkan ID
  */
-export function hapusItemRiwayat(id: string): ItemRiwayatFormulir[] {
-  const riwayat = ambilDaftarRiwayat();
+export async function hapusItemRiwayat(id: string): Promise<ItemRiwayatFormulir[]> {
+  const riwayat = ambilDaftarRiwayatLokal();
   const diperbarui = riwayat.filter((item) => item.id !== id);
-  simpanDaftarRiwayat(diperbarui);
+  simpanDaftarRiwayatLokal(diperbarui);
+
+  // Kirim penghapusan ke Neon DB
+  fetch(`/api/forms?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  }).catch((err) => console.warn('Gagal hapus item di Neon:', err));
+
   return diperbarui;
 }
 
 /**
- * Mengosongkan seluruh riwayat lokal.
+ * 6. Mengosongkan seluruh riwayat
  */
-export function bersihkanSemuaRiwayat(): ItemRiwayatFormulir[] {
+export async function bersihkanSemuaRiwayat(): Promise<ItemRiwayatFormulir[]> {
   localStorage.removeItem(KUNCI_STORAGE);
+
+  // Kirim pembersihan ke Neon DB
+  fetch('/api/forms?hapusSemua=true', {
+    method: 'DELETE',
+  }).catch((err) => console.warn('Gagal truncate tabel Neon:', err));
+
   return [];
 }
