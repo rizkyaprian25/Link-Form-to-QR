@@ -181,7 +181,11 @@ export function HistoryShelf({
 
                 <button
                   type="button"
-                  onClick={() => onHapusItem(item.id)}
+                  onClick={() => {
+                    if (window.confirm(`Hapus "${item.label}" dari riwayat dan database Neon?`)) {
+                      onHapusItem(item.id);
+                    }
+                  }}
                   title="Hapus dari Riwayat"
                   className="p-1 text-muted-foreground hover:text-destructive transition-colors rounded"
                 >

@@ -205,48 +205,77 @@ export async function togglePinRiwayat(id: string): Promise<ItemRiwayatFormulir[
 
   simpanDaftarRiwayatLokal(diperbarui);
 
-  fetch('/api/forms', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id, isPinned: pinBaru }),
-  }).catch(() => {
-    // Fallback direct browser client
-    ubahPinLangsungNeon(id, pinBaru).catch(() => {});
-  });
+  let berhasilApi = false;
+  try {
+    const res = await fetch('/api/forms', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, isPinned: pinBaru }),
+    });
+    if (res.ok) {
+      berhasilApi = true;
+    }
+  } catch {
+    // API tidak tersedia (misal di GitHub Pages)
+  }
+
+  if (!berhasilApi) {
+    await ubahPinLangsungNeon(id, pinBaru);
+  }
 
   return diperbarui;
 }
 
 /**
- * 5. Menghapus satu formulir berdasarkan ID
+ * 5. Menghapus satu formulir berdasarkan ID (dari LocalStorage dan Neon DB)
  */
 export async function hapusItemRiwayat(id: string): Promise<ItemRiwayatFormulir[]> {
   const riwayat = ambilDaftarRiwayatLokal();
+  const itemTarget = riwayat.find((item) => item.id === id);
   const diperbarui = riwayat.filter((item) => item.id !== id);
   simpanDaftarRiwayatLokal(diperbarui);
 
-  fetch(`/api/forms?id=${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-  }).catch(() => {
-    // Fallback direct browser client
-    hapusItemLangsungNeon(id).catch(() => {});
-  });
+  let berhasilApi = false;
+  try {
+    const res = await fetch(`/api/forms?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    if (res.ok) {
+      berhasilApi = true;
+    }
+  } catch {
+    // API tidak tersedia (misal di GitHub Pages)
+  }
+
+  // Jika di GitHub Pages (res.status == 404 atau API tidak aktif), eksekusi penghapusan langsung ke Neon!
+  if (!berhasilApi) {
+    await hapusItemLangsungNeon(id, itemTarget?.urlTervalidasi);
+  }
 
   return diperbarui;
 }
 
 /**
- * 6. Mengosongkan seluruh riwayat
+ * 6. Mengosongkan seluruh riwayat (dari LocalStorage dan Neon DB)
  */
 export async function bersihkanSemuaRiwayat(): Promise<ItemRiwayatFormulir[]> {
   localStorage.removeItem(KUNCI_STORAGE);
 
-  fetch('/api/forms?hapusSemua=true', {
-    method: 'DELETE',
-  }).catch(() => {
-    // Fallback direct browser client
-    bersihkanSemuaLangsungNeon().catch(() => {});
-  });
+  let berhasilApi = false;
+  try {
+    const res = await fetch('/api/forms?hapusSemua=true', {
+      method: 'DELETE',
+    });
+    if (res.ok) {
+      berhasilApi = true;
+    }
+  } catch {
+    // API tidak tersedia
+  }
+
+  if (!berhasilApi) {
+    await bersihkanSemuaLangsungNeon();
+  }
 
   return [];
 }

@@ -136,18 +136,32 @@ export async function simpanFormulirLangsungNeon(config: KonfigurasiQR): Promise
 export async function ubahPinLangsungNeon(id: string, isPinned: boolean): Promise<boolean> {
   const sql = dapatkanSql();
   if (!sql) return false;
-  await sql`UPDATE form_qrs SET is_pinned = ${isPinned} WHERE id = ${id}::uuid;`;
-  return true;
+  try {
+    await sql`UPDATE form_qrs SET is_pinned = ${isPinned} WHERE id::text = ${id};`;
+    return true;
+  } catch (err) {
+    console.error('Gagal mengubah pin di Neon:', err);
+    return false;
+  }
 }
 
 /**
  * Hapus langsung dari Neon via browser
  */
-export async function hapusItemLangsungNeon(id: string): Promise<boolean> {
+export async function hapusItemLangsungNeon(id: string, urlTervalidasi?: string): Promise<boolean> {
   const sql = dapatkanSql();
   if (!sql) return false;
-  await sql`DELETE FROM form_qrs WHERE id = ${id}::uuid;`;
-  return true;
+  try {
+    if (urlTervalidasi) {
+      await sql`DELETE FROM form_qrs WHERE id::text = ${id} OR url_validated = ${urlTervalidasi};`;
+    } else {
+      await sql`DELETE FROM form_qrs WHERE id::text = ${id};`;
+    }
+    return true;
+  } catch (err) {
+    console.error('Gagal menghapus dari Neon:', err);
+    return false;
+  }
 }
 
 /**
@@ -156,6 +170,11 @@ export async function hapusItemLangsungNeon(id: string): Promise<boolean> {
 export async function bersihkanSemuaLangsungNeon(): Promise<boolean> {
   const sql = dapatkanSql();
   if (!sql) return false;
-  await sql`TRUNCATE TABLE form_qrs;`;
-  return true;
+  try {
+    await sql`TRUNCATE TABLE form_qrs;`;
+    return true;
+  } catch (err) {
+    console.error('Gagal truncate tabel Neon:', err);
+    return false;
+  }
 }
