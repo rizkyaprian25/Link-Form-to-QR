@@ -7,12 +7,12 @@
 import { neon } from '@neondatabase/serverless';
 import { ItemRiwayatFormulir, KonfigurasiQR } from '../../../contracts/formqr';
 
+// Kunci penyimpanan connection string di localStorage peramban
 const KUNCI_STORAGE_NEON_URL = 'formqr_neon_db_url';
 
-// Default fallback connection string jika disediakan saat build
-const DEFAULT_NEON_URL =
-  (import.meta as any).env?.VITE_NEON_DATABASE_URL ||
-  'postgresql://neondb_owner:npg_xBOufe3s5nZV@ep-icy-block-ao4vn5hj-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+// URL Neon database hanya dibaca dari environment variable Vite (.env lokal)
+// DILARANG KERAS menaruh hardcoded kredensial di kode sumber agar lolos audit keamanan & secret scanning
+const ENV_NEON_URL = (import.meta as any).env?.VITE_NEON_DATABASE_URL || '';
 
 /**
  * Informasi koneksi yang disensor (masked) agar password dan detail sensitif
@@ -41,27 +41,27 @@ export function ambilInfoKoneksiDisensor(): InfoKoneksiDisensor {
       terhubung: true,
       hostMasked,
       database: parsed.pathname.replace('/', '') || 'neondb',
-      username: parsed.username || 'neondb_owner',
+      username: parsed.username || 'user',
     };
   } catch {
     return {
-      terhubung: true,
-      hostMasked: 'ep-icy-block•••.neon.tech',
-      database: 'neondb',
-      username: 'neondb_owner',
+      terhubung: false,
+      hostMasked: '',
+      database: '',
+      username: '',
     };
   }
 }
 
 /**
  * Mengambil connection string aktif:
- * Prioritas 1: Dari penyimpanan lokal pengguna di browser ini
- * Prioritas 2: Dari konfigurasi default
+ * Prioritas 1: Dari penyimpanan lokal pengguna di browser ini (localStorage)
+ * Prioritas 2: Dari konfigurasi lingkungan (.env lokal VITE_NEON_DATABASE_URL)
  */
 export function ambilConnectionStringNeon(): string {
-  if (typeof window === 'undefined') return DEFAULT_NEON_URL;
+  if (typeof window === 'undefined') return ENV_NEON_URL;
   const disimpan = localStorage.getItem(KUNCI_STORAGE_NEON_URL);
-  return (disimpan && disimpan.trim()) || DEFAULT_NEON_URL;
+  return (disimpan && disimpan.trim()) || ENV_NEON_URL;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { Database, X, CheckCircle2, AlertCircle, Save, Shield, Lock, Eye, EyeOff } from 'lucide-react';
+import { Database, X, CheckCircle2, AlertCircle, Save, Shield, Lock, Eye, EyeOff, Unlink } from 'lucide-react';
 import { useState } from 'react';
 import { StatusDatabase } from '../features/generator/services/storageService';
 import {
@@ -17,10 +17,11 @@ interface DatabaseModalProps {
  * Menyensor kata sandi dan detail rahasia agar tidak terlihat oleh orang lain di layar.
  */
 export function DatabaseModal({ statusDatabase, onTutup, onCekUlang }: DatabaseModalProps) {
-  const [bukaFormUbah, setBukaFormUbah] = useState(false);
+  const [bukaFormUbah, setBukaFormUbah] = useState(() => statusDatabase !== 'terhubung_neon');
   const [inputUrl, setInputUrl] = useState('');
   const [lihatPassword, setLihatPassword] = useState(false);
   const [tersimpanNotif, setTersimpanNotif] = useState(false);
+  const [pesanNotif, setPesanNotif] = useState('');
 
   const infoKoneksi = ambilInfoKoneksiDisensor();
 
@@ -29,10 +30,20 @@ export function DatabaseModal({ statusDatabase, onTutup, onCekUlang }: DatabaseM
       simpanConnectionStringNeon(inputUrl);
       setInputUrl('');
       setBukaFormUbah(false);
+      setPesanNotif('✓ Kredensial berhasil disimpan & menghubungkan...');
       setTersimpanNotif(true);
-      setTimeout(() => setTersimpanNotif(false), 2000);
+      setTimeout(() => setTersimpanNotif(false), 2500);
       onCekUlang();
     }
+  };
+
+  const handlePutuskanKoneksi = () => {
+    simpanConnectionStringNeon('');
+    setBukaFormUbah(true);
+    setPesanNotif('✓ Koneksi database berhasil diputus. Kembali ke mode lokal.');
+    setTersimpanNotif(true);
+    setTimeout(() => setTersimpanNotif(false), 2500);
+    onCekUlang();
   };
 
   return (
@@ -98,15 +109,15 @@ export function DatabaseModal({ statusDatabase, onTutup, onCekUlang }: DatabaseM
             <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
               <div>
                 <span className="text-muted-foreground block text-[10px]">Database:</span>
-                <span className="font-semibold text-foreground">{infoKoneksi.database || 'neondb'}</span>
+                <span className="font-semibold text-foreground">{infoKoneksi.database || '-'}</span>
               </div>
               <div>
                 <span className="text-muted-foreground block text-[10px]">Pengguna:</span>
-                <span className="font-semibold text-foreground">{infoKoneksi.username || 'neondb_owner'}</span>
+                <span className="font-semibold text-foreground">{infoKoneksi.username || '-'}</span>
               </div>
               <div className="col-span-2">
                 <span className="text-muted-foreground block text-[10px]">Host Endpoint:</span>
-                <span className="text-foreground truncate block">{infoKoneksi.hostMasked}</span>
+                <span className="text-foreground truncate block">{infoKoneksi.hostMasked || '-'}</span>
               </div>
               <div className="col-span-2 flex items-center justify-between bg-card border border-border p-2 rounded">
                 <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -116,40 +127,55 @@ export function DatabaseModal({ statusDatabase, onTutup, onCekUlang }: DatabaseM
                 <span className="font-mono text-muted-foreground tracking-widest">••••••••••••••••</span>
               </div>
             </div>
+
+            <div className="pt-1 flex justify-end">
+              <button
+                type="button"
+                onClick={handlePutuskanKoneksi}
+                className="inline-flex items-center gap-1 text-[11px] text-red-600 dark:text-red-400 hover:underline"
+              >
+                <Unlink className="w-3 h-3" />
+                <span>Putuskan / Hapus dari Browser Ini</span>
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Form Ganti Connection String (Tersembunyi & Diproteksi) */}
+        {/* Form Ganti / Tambah Connection String (Tersembunyi & Diproteksi) */}
         <div className="space-y-3 pt-1 border-t border-border/60">
           {!bukaFormUbah ? (
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground text-[11px]">
-                Ingin menghubungkan ke database Neon lain?
+                {statusDatabase === 'terhubung_neon'
+                  ? 'Ingin menghubungkan ke database Neon lain?'
+                  : 'Aktifkan sinkronisasi awan Neon PostgreSQL:'}
               </span>
               <button
                 type="button"
                 onClick={() => setBukaFormUbah(true)}
                 className="text-accent hover:underline font-semibold text-xs"
               >
-                Ganti Connection String
+                {statusDatabase === 'terhubung_neon' ? 'Ganti Connection String' : 'Hubungkan Neon DB'}
               </button>
             </div>
           ) : (
             <div className="space-y-2 p-3.5 bg-muted/60 border border-border rounded-lg text-xs animate-in fade-in-50 duration-200">
               <div className="flex items-center justify-between">
                 <label htmlFor="neon-pass-input" className="font-semibold text-foreground">
-                  Masukkan Connection String Baru:
+                  {statusDatabase === 'terhubung_neon' ? 'Masukkan Connection String Baru:' : 'Connection String Neon Database:'}
                 </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBukaFormUbah(false);
-                    setInputUrl('');
-                  }}
-                  className="text-muted-foreground hover:text-foreground text-[11px]"
-                >
-                  Batal
-                </button>
+                {statusDatabase === 'terhubung_neon' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBukaFormUbah(false);
+                      setInputUrl('');
+                    }}
+                    className="text-muted-foreground hover:text-foreground text-[11px]"
+                  >
+                    Batal
+                  </button>
+                )}
               </div>
 
               <div className="relative">
@@ -158,7 +184,7 @@ export function DatabaseModal({ statusDatabase, onTutup, onCekUlang }: DatabaseM
                   type={lihatPassword ? 'text' : 'password'}
                   value={inputUrl}
                   onChange={(e) => setInputUrl(e.target.value)}
-                  placeholder="postgresql://user:password@host/db..."
+                  placeholder="postgresql://user:password@host/db?sslmode=require"
                   className="w-full pl-3 pr-10 py-2 text-xs font-mono rounded border border-border bg-card text-foreground focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
                   spellCheck="false"
                 />
@@ -171,8 +197,8 @@ export function DatabaseModal({ statusDatabase, onTutup, onCekUlang }: DatabaseM
                 </button>
               </div>
 
-              <p className="text-[10px] text-muted-foreground">
-                Kata sandi Anda akan disensor secara otomatis dan tersimpan aman di perangkat Anda.
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                Kredensial disimpan lokal di peramban Anda (localStorage) dan dikirim langsung ke serverless Neon via SSL terenkripsi tanpa melalui server publik.
               </p>
 
               <div className="flex justify-end pt-1">
@@ -183,7 +209,7 @@ export function DatabaseModal({ statusDatabase, onTutup, onCekUlang }: DatabaseM
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-accent text-accent-foreground rounded text-xs font-semibold hover:bg-accent-hover disabled:opacity-40 transition-colors"
                 >
                   <Save className="w-3.5 h-3.5" />
-                  <span>Simpan Kredensial Baru</span>
+                  <span>Simpan &amp; Hubungkan</span>
                 </button>
               </div>
             </div>
@@ -193,7 +219,7 @@ export function DatabaseModal({ statusDatabase, onTutup, onCekUlang }: DatabaseM
         {/* Footer Tombol Aksi */}
         <div className="flex items-center justify-between pt-2 border-t border-border/60">
           <div className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-            {tersimpanNotif ? '✓ Kredensial berhasil diperbarui!' : ''}
+            {tersimpanNotif ? pesanNotif : ''}
           </div>
           <button
             type="button"
