@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS form_qrs (
     has_logo BOOLEAN DEFAULT TRUE,
     ratio_logo NUMERIC(4, 2) DEFAULT 0.18,
     target_dpi INTEGER DEFAULT 300,
+    short_code VARCHAR(32),
     download_count INTEGER DEFAULT 0,
     is_pinned BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
@@ -28,3 +29,4 @@ CREATE TABLE IF NOT EXISTS form_qrs (
 CREATE INDEX IF NOT EXISTS idx_form_qrs_created_at ON form_qrs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_form_qrs_url ON form_qrs(url_validated);
 CREATE INDEX IF NOT EXISTS idx_form_qrs_pinned ON form_qrs(is_pinned DESC);
+CREATE INDEX IF NOT EXISTS idx_form_qrs_short_code ON form_qrs(short_code);

@@ -13,6 +13,18 @@ export type GayaModulQR = 'sharp' | 'rounded' | 'dots' | 'smooth';
 // Format ekspor yang didukung aplikasi
 export type FormatEkspor = 'svg' | 'png-1024' | 'png-2048' | 'print-tent' | 'print-flyer';
 
+// Pilihan sumber URL yang dikodekan ke dalam matriks QR Code
+export type ModeSumberQR = 'short_link' | 'google_clean' | 'asli';
+
+// Informasi entitas tautan pendek (URL Shortener)
+export interface InfoShortLink {
+  kodePendek: string;         // Slug unik (contoh: k7x2p9 atau ujian-ipa9)
+  urlLengkap: string;         // URL pendek lengkap (contoh: https://domain/?s=k7x2p9)
+  urlTujuan: string;          // URL target Google Form / Drive
+  dibuatPada: string;         // Timestamp ISO 8601 UTC
+  jumlahKlik?: number;        // Metrik klik pengalihan
+}
+
 // Status validasi tautan URL Google Form
 export type StatusValidasiUrl = 
   | 'idle'               // Belum ada masukan URL
@@ -36,6 +48,8 @@ export interface KonfigurasiQR {
   sematkanLogo: boolean;
   rasioLogo: number;         // 0.15 hingga 0.22 dari lebar kanvas
   dpiTarget: number;         // Default: 300 DPI untuk kualitas cetak fisik
+  modeSumberQR?: ModeSumberQR; // Sumber URL yang aktif dikodekan ke QR
+  kodePendek?: string;       // Kode slug tautan pendek yang terhubung
 }
 
 // Entitas riwayat formulir yang tersimpan secara lokal di peramban
@@ -48,6 +62,7 @@ export interface ItemRiwayatFormulir {
   konfigurasi: KonfigurasiQR;
   jumlahUnduhan: number;     // Metrik frekuensi ekspor lokal
   isPinned?: boolean;        // Penanda favorit agar tidak terhapus otomatis oleh LRU
+  kodePendek?: string;       // Slug short link yang dapat disalin kembali
 }
 
 // Hasil eksekusi evaluasi validator URL

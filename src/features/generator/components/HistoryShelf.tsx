@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { History, Pin, Trash2, ArrowUpRight, Search, FileSpreadsheet } from 'lucide-react';
+import { History, Pin, Trash2, ArrowUpRight, Search, FileSpreadsheet, Copy, Check, Zap } from 'lucide-react';
 import { ItemRiwayatFormulir } from '../../../contracts/formqr';
+import { bangunUrlPendek } from '../services/shortenerService';
 
 interface HistoryShelfProps {
   daftarRiwayat: ItemRiwayatFormulir[];
@@ -13,7 +14,8 @@ interface HistoryShelfProps {
 /**
  * Rak Bawah Riwayat Formulir (Local Storage Shelf)
  * Menampilkan katalog formulir yang pernah dibuat di browser pengguna,
- * dengan filter kategori, pencarian cepat, aksi muat ulang, dan penanda pin favorit.
+ * dengan filter kategori, pencarian cepat, aksi muat ulang, penanda pin favorit,
+ * dan tombol salin tautan pendek instan.
  */
 export function HistoryShelf({
   daftarRiwayat,
@@ -24,6 +26,18 @@ export function HistoryShelf({
 }: HistoryShelfProps) {
   const [filterAktif, setFilterAktif] = useState<string>('Semua');
   const [kataKunci, setKataKunci] = useState<string>('');
+  const [salinId, setSalinId] = useState<string | null>(null);
+
+  const handleSalinShortLink = async (kode: string, id: string) => {
+    try {
+      const url = bangunUrlPendek(kode);
+      await navigator.clipboard.writeText(url);
+      setSalinId(id);
+      setTimeout(() => setSalinId(null), 2000);
+    } catch (err) {
+      console.error('Gagal menyalin tautan pendek riwayat:', err);
+    }
+  };
 
   // Saring daftar berdasarkan filter kategori dan kata kunci
   const riwayatTersaring = daftarRiwayat.filter((item) => {
@@ -166,6 +180,25 @@ export function HistoryShelf({
                 <div className="text-[11px] font-mono text-muted-foreground truncate bg-muted/40 px-2 py-0.5 rounded border border-border/40">
                   {item.urlTervalidasi}
                 </div>
+
+                {/* Badge & Salin Tautan Pendek jika ada */}
+                {(item.kodePendek || item.konfigurasi.kodePendek) && (
+                  <div className="flex items-center justify-between gap-1.5 bg-accent/5 border border-accent/15 px-2 py-1 rounded text-[11px]">
+                    <span className="font-mono text-accent truncate flex items-center gap-1 font-medium">
+                      <Zap className="w-3 h-3 shrink-0" />
+                      ?s={item.kodePendek || item.konfigurasi.kodePendek}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleSalinShortLink(item.kodePendek || item.konfigurasi.kodePendek || '', item.id)}
+                      className="text-accent hover:text-accent-hover text-[10px] font-medium inline-flex items-center gap-1 shrink-0 bg-card border border-border px-1.5 py-0.5 rounded"
+                      title="Salin tautan pendek ke clipboard"
+                    >
+                      {salinId === item.id ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                      <span>{salinId === item.id ? 'Tersalin' : 'Salin'}</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Aksi Bar Bawah Kartu */}

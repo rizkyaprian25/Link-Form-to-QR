@@ -25,6 +25,14 @@ FormQR Studio adalah aplikasi web utilitas yang dirancang untuk mengubah tautan 
   Menggunakan algoritma Reed-Solomon untuk memastikan kode QR tetap terbaca oleh kamera ponsel meski disematkan logo di bagian tengah.
 - **Emblem Resmi Google Form Terintegrasi:**  
   Menyematkan lambang ungu Google Form lengkap dengan zona aman (*safe halo margin*) agar tidak menutupi modul deteksi sudut QR.
+- **Pemendek Tautan & Sumber QR Interaktif (Pill Switcher):**  
+  - *Tautan Pendek FormQR (`?s=xyz`):* Menghasilkan QR Code yang jauh lebih renggang (modul besar) sehingga sangat mudah dan cepat dipindai kamera HP siswa di ruang kelas.
+  - *Tautan Google Bersih:* Membersihkan parameter tracking Google (`?usp=sf_link`, parameter edit, dsb.) menghasilkan URL Google asli yang paling ringkas dan **100% langsung lolos di aplikasi NETRI Exam tanpa ubah kode**.
+  - *Dukungan Alias Kustom:* Pengguna bisa memilih acak otomatis 6 karakter unik atau mengetikkan nama tautan sendiri (contoh: `?s=ujian-ipa9`).
+- **Fast Redirector Screen:**  
+  Saat tautan pendek dibuka atau dipindai, sistem langsung mengalihkan siswa ke Google Form tujuan via `window.location.replace`, lengkap dengan tombol darurat *"Buka Formulir Sekarang"*.
+- **Database Neon PostgreSQL Serverless:**  
+  Penyimpanan riwayat dan relasi tautan pendek di cloud database Neon dengan sinkronisasi lokal instan (*Zero-Backend Direct Client*).
 - **Aksi Ekspor Lengkap:**  
   - *Vector SVG:* Format kurva murni untuk desainer grafis.
   - *High-Res PNG (2048px • 300 DPI):* Siap cetak langsung.
@@ -96,6 +104,40 @@ FormQR Studio adalah aplikasi web utilitas yang dirancang untuk mengubah tautan 
     │   └── components/        # Komponen UI (InputSection, CustomizerPanel, PreviewCanvas, ExportSuite, HistoryShelf, PrintFlyerSheet)
     └── styles/                # CSS global dan stylesheet media cetak
 ```
+
+---
+
+## Panduan Kompatibilitas dengan Aplikasi Ujian (NETRI Exam)
+
+FormQR Studio dirancang agar selaras dengan ekosistem aplikasi ujian mobile (seperti **NETRI Exam**):
+
+1. **Penggunaan Mode Google Bersih (Tanpa Ubah Kode Flutter):**  
+   Pilih opsi **Google Bersih** pada panel *Pilihan Target QR*. Sistem akan memangkas seluruh parameter analitik sampah (`?usp=sf_link`, dsb.) dan menghasilkan format Google Form / Drive asli yang **100% langsung diterima oleh APK NETRI Exam saat ini**.
+
+2. **Mengaktifkan Pemindaian QR Tautan Pendek di NETRI Exam (Opsional):**  
+   Jika Anda ingin aplikasi Flutter NETRI Exam Anda dapat langsung memindai QR Code Tautan Pendek (`?s=xyz`), tambahkan domain GitHub Pages FormQR Studio ke berkas `lib/features/auth/login_screen.dart`:
+   ```dart
+   // 1. Pada fungsi _startExam() baris 134:
+   final isGoogle = rawUrl.contains('google.com') || rawUrl.contains('forms.gle');
+   final isFormQr = rawUrl.contains('rizkyaprian25.github.io') || rawUrl.contains('Link-Form-to-QR');
+   if (uri == null || (!isGoogle && !isFormQr)) {
+     setState(() {
+       _errorMessage = 'Tautan harus berupa formulir Google Forms atau QR Netri yang sah.';
+     });
+     return;
+   }
+
+   // 2. Pada daftar allowedDomains di _proceedToExam():
+   allowedDomains: const [
+     'docs.google.com',
+     'forms.google.com',
+     'google.com',
+     'gstatic.com',
+     'googleusercontent.com',
+     'forms.gle',
+     'rizkyaprian25.github.io', // Domain FormQR Studio
+   ],
+   ```
 
 ---
 

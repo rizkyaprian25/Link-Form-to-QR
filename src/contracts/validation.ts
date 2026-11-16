@@ -11,6 +11,9 @@ export const REGEX_GOOGLE_FORM_FULL = /^https?:\/\/(?:docs\.google\.com\/forms\/
 export const REGEX_GOOGLE_FORM_SHORT = /^https?:\/\/(?:forms\.gle\/([a-zA-Z0-9_-]+))$/i;
 export const REGEX_HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
 
+// Regex validasi slug kustom tautan pendek (3-30 karakter alphanumeric, dash, underscore)
+export const REGEX_CUSTOM_SLUG = /^[a-zA-Z0-9_-]{3,30}$/;
+
 // Skema validasi masukan konfigurasi QR
 export const SkemaKonfigurasiQR = z.object({
   urlAsli: z
@@ -52,6 +55,8 @@ export const SkemaKonfigurasiQR = z.object({
   sematkanLogo: z.boolean().default(true),
   rasioLogo: z.number().min(0.12).max(0.24).default(0.18),
   dpiTarget: z.number().int().min(72).max(600).default(300),
+  modeSumberQR: z.enum(['short_link', 'google_clean', 'asli']).default('google_clean').optional(),
+  kodePendek: z.string().max(40).optional(),
 });
 
 // Skema validasi entitas riwayat lokal untuk memverifikasi data saat deserialisasi storage
@@ -64,6 +69,7 @@ export const SkemaItemRiwayat = z.object({
   konfigurasi: SkemaKonfigurasiQR,
   jumlahUnduhan: z.number().int().nonnegative(),
   isPinned: z.boolean().optional(),
+  kodePendek: z.string().max(40).optional(),
 });
 
 export const SkemaDaftarRiwayat = z.array(SkemaItemRiwayat);

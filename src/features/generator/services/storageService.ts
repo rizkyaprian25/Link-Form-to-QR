@@ -9,6 +9,7 @@
 import { ItemRiwayatFormulir, KonfigurasiQR } from '../../../contracts/formqr';
 import { SkemaDaftarRiwayat } from '../../../contracts/validation';
 import { MOCK_RIWAYAT_AWAL } from '../../../mock/mockForms';
+import { simpanShortLinkLokal } from './shortenerService';
 import {
   ambilConnectionStringNeon,
   ambilRiwayatLangsungNeon,
@@ -122,7 +123,8 @@ export async function catatFormulirBaru(
       label: labelFinal,
       terakhirDiakses: new Date().toISOString(),
       jumlahUnduhan: itemAda.jumlahUnduhan + 1,
-      konfigurasi: { ...config, labelFormulir: labelFinal, tagKategori: tagFinal },
+      kodePendek: config.kodePendek || itemAda.kodePendek,
+      konfigurasi: { ...config, labelFormulir: labelFinal, tagKategori: tagFinal, kodePendek: config.kodePendek || itemAda.kodePendek },
     };
 
     daftarBaru = [
@@ -139,6 +141,7 @@ export async function catatFormulirBaru(
       terakhirDiakses: new Date().toISOString(),
       jumlahUnduhan: 1,
       isPinned: false,
+      kodePendek: config.kodePendek,
       konfigurasi: { ...config, labelFormulir: labelFinal, tagKategori: tagFinal },
     };
 
@@ -150,6 +153,10 @@ export async function catatFormulirBaru(
     const itemBiasa = daftarBaru.filter((i) => !i.isPinned);
     const kuotaTersisa = BATAS_MAKSIMAL_RIWAYAT - itemDipin.length;
     daftarBaru = [...itemDipin, ...itemBiasa.slice(0, kuotaTersisa)];
+  }
+
+  if (config.kodePendek) {
+    simpanShortLinkLokal(config.kodePendek, urlTervalidasi);
   }
 
   simpanDaftarRiwayatLokal(daftarBaru);

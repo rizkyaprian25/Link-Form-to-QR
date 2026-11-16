@@ -54,9 +54,17 @@ export function PreviewCanvas({ config, svgContent, isReady, canvasRef }: Previe
           </span>
         </div>
         <div className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded border border-border/60">
-          <span>1024 × 1024 PX</span>
+          <span className="font-semibold text-accent">
+            {config.modeSumberQR === 'short_link'
+              ? '⚡ QR Link Pendek'
+              : config.modeSumberQR === 'google_clean'
+              ? '🛡️ QR Google Bersih'
+              : '📄 QR Asli'}
+          </span>
           <span>•</span>
-          <span className="text-accent font-semibold">{config.dpiTarget} DPI</span>
+          <span>{urlAktif.length} Char</span>
+          <span>•</span>
+          <span className="font-semibold">{config.dpiTarget} DPI</span>
         </div>
       </div>
 
