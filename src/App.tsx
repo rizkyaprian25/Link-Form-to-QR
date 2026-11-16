@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useTransition } from 'react';
 import { AppShell } from './components/AppShell';
-import { RedirectScreen } from './components/RedirectScreen';
 import { InputSection } from './features/generator/components/InputSection';
 import { CustomizerPanel } from './features/generator/components/CustomizerPanel';
 import { PreviewCanvas } from './features/generator/components/PreviewCanvas';
@@ -8,14 +7,9 @@ import { ExportSuite } from './features/generator/components/ExportSuite';
 import { HistoryShelf } from './features/generator/components/HistoryShelf';
 import { PrintFlyerSheet } from './features/generator/components/PrintFlyerSheet';
 import { DatabaseModal } from './components/DatabaseModal';
-import { KonfigurasiQR, ItemRiwayatFormulir, PresetTemplatForm, ModeSumberQR } from './contracts/formqr';
+import { KonfigurasiQR, ItemRiwayatFormulir, PresetTemplatForm } from './contracts/formqr';
 import { prosesUrlGoogleForm } from './features/generator/services/urlParser';
 import { buatQrCodeSvg } from './features/generator/services/qrEngine';
-import {
-  buatShortCodeAcak,
-  bangunUrlPendek,
-  simpanShortLinkLokal,
-} from './features/generator/services/shortenerService';
 import {
   ambilDaftarRiwayatLokal,
   sinkronkanDenganNeon,
@@ -26,12 +20,12 @@ import {
   StatusDatabase,
 } from './features/generator/services/storageService';
 
-// Konfigurasi default studio
+// Konfigurasi awal studio dengan kategori default Ulangan
 const KONFIGURASI_AWAL: KonfigurasiQR = {
   urlAsli: 'https://forms.gle/xK8y9Q2pM4wZ7L1eA',
   urlTervalidasi: 'https://forms.gle/xK8y9Q2pM4wZ7L1eA',
-  labelFormulir: 'Presensi Seminar AI & Cloud 2026',
-  tagKategori: 'Presensi',
+  labelFormulir: 'Ulangan Harian Informatika Kelas 7 - Bab 1',
+  tagKategori: 'Ulangan',
   warnaMatriks: '#18181B',
   warnaLatar: '#FFFFFF',
   marginModul: 4,
@@ -40,37 +34,15 @@ const KONFIGURASI_AWAL: KonfigurasiQR = {
   sematkanLogo: true,
   rasioLogo: 0.18,
   dpiTarget: 300,
-  modeSumberQR: 'short_link',
-  kodePendek: 'ai2026',
 };
 
 /**
  * Komponen Induk Aplikasi FormQR Studio
- * Mengatur orkestrasi partisi state (URL, Konfigurasi, Matriks SVG, Mode Sumber QR, dan Penyimpanan Neon DB).
+ * Mengatur orkestrasi partisi state (URL, Konfigurasi, Matriks SVG, dan Penyimpanan Neon DB / Lokal).
  */
 export function App() {
-  // 0. Deteksi apakah URL memuat parameter redirect ?s=xyz atau #/s/xyz
-  const [redirectKode, setRedirectKode] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null;
-    const params = new URLSearchParams(window.location.search);
-    const sParam = params.get('s') || params.get('go');
-    if (sParam && sParam.trim()) return sParam.trim();
-
-    // Deteksi jika menggunakan pola fragment hash #s/xyz atau #/s/xyz
-    const hash = window.location.hash;
-    const match = hash.match(/#\/?s\/([a-zA-Z0-9_-]+)/);
-    if (match) return match[1];
-
-    return null;
-  });
-
   const [urlInput, setUrlInput] = useState<string>(KONFIGURASI_AWAL.urlAsli);
-  const [modeSumberQR, setModeSumberQR] = useState<ModeSumberQR>('short_link');
-  const [kodePendek, setKodePendek] = useState<string>(() => buatShortCodeAcak(6));
-  const [config, setConfig] = useState<KonfigurasiQR>({
-    ...KONFIGURASI_AWAL,
-    kodePendek: 'ai2026',
-  });
+  const [config, setConfig] = useState<KonfigurasiQR>(KONFIGURASI_AWAL);
   const [svgContent, setSvgContent] = useState<string>('');
   const [daftarRiwayat, setDaftarRiwayat] = useState<ItemRiwayatFormulir[]>([]);
   const [statusDatabase, setStatusDatabase] = useState<StatusDatabase>('sedang_sinkron');
@@ -96,38 +68,18 @@ export function App() {
     });
   }, []);
 
-  // 3. Simpan relasi kode pendek ke URL target di cache lokal setiap kali diperbarui
-  useEffect(() => {
-    if (kodePendek && hasilValidasi.urlBersih) {
-      simpanShortLinkLokal(kodePendek, hasilValidasi.urlBersih);
-    }
-  }, [kodePendek, hasilValidasi.urlBersih]);
-
-  // 4. Sinkronisasi URL hasil evaluasi ke konfigurasi aktif berdasarkan modeSumberQR
+  // 3. Sinkronisasi URL hasil evaluasi ke konfigurasi aktif
   useEffect(() => {
     if (hasilValidasi.dapatDiekspor) {
-      let targetUrlFinal = hasilValidasi.urlBersih;
-
-      if (modeSumberQR === 'short_link') {
-        targetUrlFinal = bangunUrlPendek(kodePendek);
-      } else if (modeSumberQR === 'asli') {
-        targetUrlFinal = urlInput;
-      } else {
-        // google_clean
-        targetUrlFinal = hasilValidasi.urlBersih;
-      }
-
       setConfig((prev) => ({
         ...prev,
         urlAsli: urlInput,
-        urlTervalidasi: targetUrlFinal,
-        modeSumberQR,
-        kodePendek,
+        urlTervalidasi: hasilValidasi.urlBersih,
       }));
     }
-  }, [urlInput, hasilValidasi.dapatDiekspor, hasilValidasi.urlBersih, modeSumberQR, kodePendek]);
+  }, [urlInput, hasilValidasi.dapatDiekspor, hasilValidasi.urlBersih]);
 
-  // 5. Render ulang matriks SVG secara reaktif saat konfigurasi berubah
+  // 4. Render ulang matriks SVG secara reaktif saat konfigurasi berubah
   useEffect(() => {
     if (hasilValidasi.dapatDiekspor && config.urlTervalidasi) {
       buatQrCodeSvg(config)
@@ -163,23 +115,13 @@ export function App() {
   // Handler pemuatan riwayat ke editor studio
   const handlePilihRiwayat = (item: ItemRiwayatFormulir) => {
     setUrlInput(item.konfigurasi.urlAsli || item.urlTervalidasi);
-    if (item.kodePendek || item.konfigurasi.kodePendek) {
-      setKodePendek(item.kodePendek || item.konfigurasi.kodePendek || buatShortCodeAcak(6));
-    }
-    if (item.konfigurasi.modeSumberQR) {
-      setModeSumberQR(item.konfigurasi.modeSumberQR);
-    }
     setConfig(item.konfigurasi);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Handler pencatatan saat ekspor sukses (Simpan ke Neon DB & LocalStorage)
   const handleEksporSukses = async () => {
-    const hasil = await catatFormulirBaru({
-      ...config,
-      kodePendek,
-      modeSumberQR,
-    });
+    const hasil = await catatFormulirBaru(config);
     setDaftarRiwayat(hasil.daftarDiperbarui);
     if (hasil.tersimpanDiNeon) {
       setStatusDatabase('terhubung_neon');
@@ -193,22 +135,6 @@ export function App() {
     setDaftarRiwayat(res.data);
     setStatusDatabase(res.status);
   };
-
-  // JIKA SEDANG DALAM MODE REDIRECT: Tampilkan layar transisi pengalihan
-  if (redirectKode) {
-    return (
-      <RedirectScreen
-        kode={redirectKode}
-        onKembaliKeStudio={() => {
-          setRedirectKode(null);
-          // Bersihkan query param dari URL peramban tanpa refresh halaman
-          if (typeof window !== 'undefined' && window.history) {
-            window.history.replaceState({}, '', window.location.pathname);
-          }
-        }}
-      />
-    );
-  }
 
   return (
     <AppShell
@@ -227,11 +153,8 @@ export function App() {
             labelForm={config.labelFormulir}
             onLabelChange={(val) => handleChangeConfig({ labelFormulir: val })}
             tagAktif={config.tagKategori}
+            onTagChange={(tag) => handleChangeConfig({ tagKategori: tag })}
             onPilihPreset={handlePilihPreset}
-            modeSumberQR={modeSumberQR}
-            onModeSumberChange={setModeSumberQR}
-            kodePendek={kodePendek}
-            onKodePendekChange={setKodePendek}
           />
 
           <CustomizerPanel config={config} onChangeConfig={handleChangeConfig} />

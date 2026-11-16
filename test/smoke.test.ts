@@ -1,18 +1,14 @@
 /**
  * FormQR Studio - Smoke Test Otomatis (Quality Gate)
  * Menguji fungsionalitas kritis: parsing URL, auto-koreksi /edit, pembersih parameter Google,
- * mesin shortener (slug acak & kustom), pertahanan keamanan, dan generasi SVG QR.
+ * kategori Ulangan, pertahanan keamanan, dan generasi SVG QR.
  */
 
 import { prosesUrlGoogleForm, bersihkanParameterGoogle } from '../src/features/generator/services/urlParser';
 import { buatQrCodeSvg } from '../src/features/generator/services/qrEngine';
-import {
-  buatShortCodeAcak,
-  validasiCustomSlug,
-  bangunUrlPendek,
-} from '../src/features/generator/services/shortenerService';
 import { KonfigurasiQR } from '../src/contracts/formqr';
 import { SkemaKonfigurasiQR } from '../src/contracts/validation';
+import { PRESET_TEMPLAT } from '../src/mock/mockForms';
 
 async function runSmokeTests() {
   console.log('🚀 Memulai FormQR Studio Smoke Test Suite...\n');
@@ -42,7 +38,7 @@ async function runSmokeTests() {
   assert(resEdit.urlBersih.endsWith('/viewform'), 'Mengonversi akhiran /edit menjadi /viewform');
   assert(resEdit.dapatDiekspor === true, 'Tautan hasil koreksi dapat diekspor');
 
-  // --- Uji 3: Pembersih Parameter Sampah Google Form & Google Drive (Kompatibilitas NETRI Exam) ---
+  // --- Uji 3: Pembersih Parameter Sampah Google Form & Google Drive ---
   const formWithTracking = 'https://forms.gle/xK8y9Q2pM4wZ7L1eA?usp=sf_link';
   const cleanForm = bersihkanParameterGoogle(formWithTracking);
   assert(cleanForm === 'https://forms.gle/xK8y9Q2pM4wZ7L1eA', 'Membersihkan parameter ?usp=sf_link dari forms.gle');
@@ -51,34 +47,22 @@ async function runSmokeTests() {
   const cleanDrive = bersihkanParameterGoogle(driveSharing);
   assert(cleanDrive === 'https://drive.google.com/open?id=1BxiMVs0XRA5nFMdKvB', 'Mengonversi file Google Drive sharing menjadi format kanonikal open?id=');
 
-  // --- Uji 4: Mesin Pemendek Tautan (Shortener Engine) ---
-  const kodeAcak = buatShortCodeAcak(6);
-  assert(kodeAcak.length === 6, 'Menghasilkan short code acak tepat 6 karakter');
-  assert(/^[a-zA-Z0-9]+$/.test(kodeAcak), 'Short code acak hanya memuat karakter alphanumeric yang aman');
-
-  const valSlugOk = validasiCustomSlug('ujian-ipa9');
-  assert(valSlugOk.valid === true, 'Menerima slug kustom yang valid (ujian-ipa9)');
-
-  const valSlugPendek = validasiCustomSlug('ab');
-  assert(valSlugPendek.valid === false, 'Menolak slug kustom yang terlalu pendek (< 3 karakter)');
-
-  const valSlugSpasi = validasiCustomSlug('ujian ipa');
-  assert(valSlugSpasi.valid === false, 'Menolak slug kustom dengan karakter terlarang (spasi)');
-
-  const urlPendek = bangunUrlPendek('k7x2p9');
-  assert(urlPendek.includes('?s=k7x2p9'), 'Membangun tautan pendek dengan parameter query ?s=k7x2p9');
+  // --- Uji 4: Kategori Ulangan & Preset Templat ---
+  const presetUlangan = PRESET_TEMPLAT.find((p) => p.tag === 'Ulangan');
+  assert(presetUlangan !== undefined, 'Menyediakan templat preset resmi kategori Ulangan');
+  assert(presetUlangan?.saranKoreksi === 'H', 'Preset Ulangan menggunakan Tingkat Koreksi Level H untuk kemudahan scan');
 
   // --- Uji 5: Pertahanan Keamanan Injeksi Protokol (XSS & Protocol Hijacking) ---
   const resMalicious = prosesUrlGoogleForm('javascript:alert(1)');
   assert(resMalicious.status === 'invalid_syntax', 'Menolak skema javascript: sebagai invalid_syntax');
   assert(resMalicious.dapatDiekspor === false, 'Tautan berbahaya diblokir dari proses ekspor');
 
-  // --- Uji 6: Validasi Skema Runtime Zod dengan Field Shortener Baru ---
+  // --- Uji 6: Validasi Skema Runtime Zod dengan Kategori Ulangan ---
   const configUji: KonfigurasiQR = {
     urlAsli: 'https://forms.gle/xK8y9Q2pM4wZ7L1eA',
     urlTervalidasi: 'https://forms.gle/xK8y9Q2pM4wZ7L1eA',
-    labelFormulir: 'Presensi Seminar Cloud & AI',
-    tagKategori: 'Presensi',
+    labelFormulir: 'Ulangan Harian Informatika Kelas 7 - Bab 1',
+    tagKategori: 'Ulangan',
     warnaMatriks: '#18181B',
     warnaLatar: '#FFFFFF',
     marginModul: 4,
@@ -87,11 +71,9 @@ async function runSmokeTests() {
     sematkanLogo: true,
     rasioLogo: 0.18,
     dpiTarget: 300,
-    modeSumberQR: 'short_link',
-    kodePendek: 'ai2026',
   };
   const validasiZod = SkemaKonfigurasiQR.safeParse(configUji);
-  assert(validasiZod.success === true, 'Konfigurasi QR lolos validasi skema runtime Zod dengan field shortener');
+  assert(validasiZod.success === true, 'Konfigurasi QR kategori Ulangan lolos validasi skema runtime Zod');
 
   // --- Uji 7: Generasi SVG QR Code dengan Lambang Google Form ---
   const svgOutput = (await buatQrCodeSvg(configUji)).trim();

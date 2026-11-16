@@ -99,12 +99,11 @@ function petakanBaris(row: any): ItemRiwayatFormulir {
     terakhirDiakses: new Date(row.last_accessed).toISOString(),
     jumlahUnduhan: Number(row.download_count) || 0,
     isPinned: Boolean(row.is_pinned),
-    kodePendek: row.short_code || undefined,
     konfigurasi: {
       urlAsli: row.url_original,
       urlTervalidasi: row.url_validated,
       labelFormulir: row.label,
-      tagKategori: row.tag_category || 'Umum',
+      tagKategori: row.tag_category || 'Ulangan',
       warnaMatriks: row.matrix_color || '#18181B',
       warnaLatar: row.bg_color || '#FFFFFF',
       marginModul: Number(row.margin_modules) || 4,
@@ -113,8 +112,6 @@ function petakanBaris(row: any): ItemRiwayatFormulir {
       sematkanLogo: Boolean(row.has_logo),
       rasioLogo: Number(row.ratio_logo) || 0.18,
       dpiTarget: Number(row.target_dpi) || 300,
-      modeSumberQR: row.mode_sumber_qr || 'google_clean',
-      kodePendek: row.short_code || undefined,
     },
   };
 }
@@ -144,26 +141,17 @@ export async function simpanFormulirLangsungNeon(config: KonfigurasiQR): Promise
   const urlAsli = config.urlAsli;
   const urlTervalidasi = config.urlTervalidasi || config.urlAsli;
   const label = config.labelFormulir || 'Formulir Google';
-  const tag = config.tagKategori || 'Umum';
-  const shortCode = config.kodePendek || null;
-
-  // Pastikan kolom short_code tersedia di Neon DB jika tabel lama belum memilikinya
-  try {
-    await sql`ALTER TABLE form_qrs ADD COLUMN IF NOT EXISTS short_code VARCHAR(32);`;
-    await sql`CREATE INDEX IF NOT EXISTS idx_form_qrs_short_code ON form_qrs(short_code);`;
-  } catch {
-    // Abaikan jika user tidak memiliki izin ALTER TABLE
-  }
+  const tag = config.tagKategori || 'Ulangan';
 
   const rows = await sql`
     INSERT INTO form_qrs (
       label, url_original, url_validated, tag_category,
       matrix_color, bg_color, margin_modules, error_correction,
-      gaya_modul, has_logo, ratio_logo, target_dpi, short_code, download_count, last_accessed
+      gaya_modul, has_logo, ratio_logo, target_dpi, download_count, last_accessed
     ) VALUES (
       ${label}, ${urlAsli}, ${urlTervalidasi}, ${tag},
       ${config.warnaMatriks}, ${config.warnaLatar}, ${config.marginModul}, ${config.tingkatKoreksi},
-      ${config.gayaModul}, ${config.sematkanLogo}, ${config.rasioLogo}, ${config.dpiTarget}, ${shortCode}, 1, CURRENT_TIMESTAMP
+      ${config.gayaModul}, ${config.sematkanLogo}, ${config.rasioLogo}, ${config.dpiTarget}, 1, CURRENT_TIMESTAMP
     )
     ON CONFLICT (url_validated) DO UPDATE SET
       label = EXCLUDED.label,
@@ -173,35 +161,12 @@ export async function simpanFormulirLangsungNeon(config: KonfigurasiQR): Promise
       margin_modules = EXCLUDED.margin_modules,
       error_correction = EXCLUDED.error_correction,
       has_logo = EXCLUDED.has_logo,
-      short_code = COALESCE(EXCLUDED.short_code, form_qrs.short_code),
       download_count = form_qrs.download_count + 1,
       last_accessed = CURRENT_TIMESTAMP
     RETURNING *;
   `;
 
   return petakanBaris(rows[0]);
-}
-
-/**
- * Mencari URL tujuan dari short_code langsung di Neon PostgreSQL Database
- */
-export async function cariUrlDariShortCodeNeon(kode: string): Promise<string | null> {
-  const sql = dapatkanSql();
-  if (!sql) return null;
-  try {
-    const rows = await sql`
-      SELECT url_validated FROM form_qrs 
-      WHERE short_code = ${kode} OR short_code = ${kode.toLowerCase()}
-      LIMIT 1;
-    `;
-    if (rows && rows.length > 0) {
-      return rows[0].url_validated;
-    }
-    return null;
-  } catch (err) {
-    console.warn('Gagal mencari short_code di Neon DB:', err);
-    return null;
-  }
 }
 
 /**

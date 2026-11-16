@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { History, Pin, Trash2, ArrowUpRight, Search, FileSpreadsheet, Copy, Check, Zap } from 'lucide-react';
+import { History, Pin, Trash2, ArrowUpRight, Search, FileSpreadsheet, GraduationCap } from 'lucide-react';
 import { ItemRiwayatFormulir } from '../../../contracts/formqr';
-import { bangunUrlPendek } from '../services/shortenerService';
 
 interface HistoryShelfProps {
   daftarRiwayat: ItemRiwayatFormulir[];
@@ -14,8 +13,8 @@ interface HistoryShelfProps {
 /**
  * Rak Bawah Riwayat Formulir (Local Storage Shelf)
  * Menampilkan katalog formulir yang pernah dibuat di browser pengguna,
- * dengan filter kategori, pencarian cepat, aksi muat ulang, penanda pin favorit,
- * dan tombol salin tautan pendek instan.
+ * dengan filter kategori (Ulangan, Ujian, Presensi, Feedback, dll.), pencarian cepat,
+ * aksi muat ulang, dan penanda pin favorit.
  */
 export function HistoryShelf({
   daftarRiwayat,
@@ -26,18 +25,6 @@ export function HistoryShelf({
 }: HistoryShelfProps) {
   const [filterAktif, setFilterAktif] = useState<string>('Semua');
   const [kataKunci, setKataKunci] = useState<string>('');
-  const [salinId, setSalinId] = useState<string | null>(null);
-
-  const handleSalinShortLink = async (kode: string, id: string) => {
-    try {
-      const url = bangunUrlPendek(kode);
-      await navigator.clipboard.writeText(url);
-      setSalinId(id);
-      setTimeout(() => setSalinId(null), 2000);
-    } catch (err) {
-      console.error('Gagal menyalin tautan pendek riwayat:', err);
-    }
-  };
 
   // Saring daftar berdasarkan filter kategori dan kata kunci
   const riwayatTersaring = daftarRiwayat.filter((item) => {
@@ -50,7 +37,8 @@ export function HistoryShelf({
 
     const cocokKataKunci =
       item.label.toLowerCase().includes(kataKunci.toLowerCase()) ||
-      item.urlTervalidasi.toLowerCase().includes(kataKunci.toLowerCase());
+      item.urlTervalidasi.toLowerCase().includes(kataKunci.toLowerCase()) ||
+      item.konfigurasi.tagKategori?.toLowerCase().includes(kataKunci.toLowerCase());
 
     return cocokKategori && cocokKataKunci;
   });
@@ -69,7 +57,7 @@ export function HistoryShelf({
     }
   };
 
-  const kategoriTabs = ['Semua', 'Favorit', 'Presensi', 'Feedback', 'Pendaftaran'];
+  const kategoriTabs = ['Semua', 'Favorit', 'Ulangan', 'Ujian', 'Presensi', 'Feedback', 'Pendaftaran'];
 
   return (
     <div className="bg-card border border-border rounded-lg p-5 sm:p-6 space-y-4 shadow-sm w-full mt-6">
@@ -78,10 +66,10 @@ export function HistoryShelf({
         <div>
           <h2 className="text-base font-semibold text-foreground tracking-tight flex items-center gap-2">
             <History className="w-4 h-4 text-accent" />
-            Riwayat Formulir yang Dibuat
+            Riwayat Formulir &amp; Ulangan yang Dibuat
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Tersimpan aman di peramban lokal. Anda dapat memuat ulang konfigurasi atau mencetak kembali sewaktu-waktu.
+            Tersimpan aman di peramban lokal dan database Neon. Anda dapat memuat ulang konfigurasi atau mencetak kembali sewaktu-waktu.
           </p>
         </div>
 
@@ -113,33 +101,34 @@ export function HistoryShelf({
                   key={tab}
                   type="button"
                   onClick={() => setFilterAktif(tab)}
-                  className={`px-3 py-1 text-xs rounded font-medium transition-all ${
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1 ${
                     isAktif
-                      ? 'bg-primary text-primary-foreground shadow-xs'
+                      ? 'bg-accent text-accent-foreground shadow-xs'
                       : 'bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted'
                   }`}
                 >
-                  {tab}
+                  {tab === 'Ulangan' && <GraduationCap className="w-3 h-3" />}
+                  <span>{tab}</span>
                 </button>
               );
             })}
           </div>
 
-          {/* Search Bar Mini */}
+          {/* Kotak Pencarian */}
           <div className="relative w-full sm:w-64">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Cari formulir..."
               value={kataKunci}
               onChange={(e) => setKataKunci(e.target.value)}
+              placeholder="Cari label, tautan, atau kategori..."
               className="w-full pl-8 pr-3 py-1.5 text-xs rounded border border-border bg-card text-foreground focus:outline-none focus:border-accent"
             />
           </div>
         </div>
       )}
 
-      {/* Grid Kartu Riwayat */}
+      {/* Grid Katalog Riwayat */}
       {riwayatTersaring.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
           {riwayatTersaring.map((item) => (
@@ -169,8 +158,11 @@ export function HistoryShelf({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border">
-                    {item.konfigurasi.tagKategori || 'Form'}
+                  <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border flex items-center gap-1">
+                    {item.konfigurasi.tagKategori?.toLowerCase() === 'ulangan' && (
+                      <GraduationCap className="w-3 h-3 text-accent" />
+                    )}
+                    <span>{item.konfigurasi.tagKategori || 'Form'}</span>
                   </span>
                   <span className="text-[11px] text-muted-foreground">
                     {formatTanggal(item.dibuatPada)}
@@ -180,25 +172,6 @@ export function HistoryShelf({
                 <div className="text-[11px] font-mono text-muted-foreground truncate bg-muted/40 px-2 py-0.5 rounded border border-border/40">
                   {item.urlTervalidasi}
                 </div>
-
-                {/* Badge & Salin Tautan Pendek jika ada */}
-                {(item.kodePendek || item.konfigurasi.kodePendek) && (
-                  <div className="flex items-center justify-between gap-1.5 bg-accent/5 border border-accent/15 px-2 py-1 rounded text-[11px]">
-                    <span className="font-mono text-accent truncate flex items-center gap-1 font-medium">
-                      <Zap className="w-3 h-3 shrink-0" />
-                      ?s={item.kodePendek || item.konfigurasi.kodePendek}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleSalinShortLink(item.kodePendek || item.konfigurasi.kodePendek || '', item.id)}
-                      className="text-accent hover:text-accent-hover text-[10px] font-medium inline-flex items-center gap-1 shrink-0 bg-card border border-border px-1.5 py-0.5 rounded"
-                      title="Salin tautan pendek ke clipboard"
-                    >
-                      {salinId === item.id ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                      <span>{salinId === item.id ? 'Tersalin' : 'Salin'}</span>
-                    </button>
-                  </div>
-                )}
               </div>
 
               {/* Aksi Bar Bawah Kartu */}

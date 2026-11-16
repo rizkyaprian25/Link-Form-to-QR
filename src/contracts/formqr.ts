@@ -13,26 +13,28 @@ export type GayaModulQR = 'sharp' | 'rounded' | 'dots' | 'smooth';
 // Format ekspor yang didukung aplikasi
 export type FormatEkspor = 'svg' | 'png-1024' | 'png-2048' | 'print-tent' | 'print-flyer';
 
-// Pilihan sumber URL yang dikodekan ke dalam matriks QR Code
-export type ModeSumberQR = 'short_link' | 'google_clean' | 'asli';
+// Kategori formulir standar
+export const KATEGORI_STANDAR = [
+  'Ulangan',
+  'Ujian',
+  'Presensi',
+  'Kuis',
+  'Pendaftaran',
+  'Feedback',
+  'Akademik',
+  'Umum',
+] as const;
 
-// Informasi entitas tautan pendek (URL Shortener)
-export interface InfoShortLink {
-  kodePendek: string;         // Slug unik (contoh: k7x2p9 atau ujian-ipa9)
-  urlLengkap: string;         // URL pendek lengkap (contoh: https://domain/?s=k7x2p9)
-  urlTujuan: string;          // URL target Google Form / Drive
-  dibuatPada: string;         // Timestamp ISO 8601 UTC
-  jumlahKlik?: number;        // Metrik klik pengalihan
-}
+export type KategoriFormulir = (typeof KATEGORI_STANDAR)[number] | string;
 
 // Status validasi tautan URL Google Form
-export type StatusValidasiUrl = 
-  | 'idle'               // Belum ada masukan URL
-  | 'valid_short'        // Domain forms.gle yang valid
-  | 'valid_full'         // Domain docs.google.com/forms yang valid (/viewform)
-  | 'auto_corrected'     // Tautan edit (/edit) yang berhasil dialihkan otomatis ke /viewform
-  | 'invalid_syntax'     // Format URL rusak / tidak memenuhi standar HTTP(S)
-  | 'unsupported_domain';// URL web valid namun bukan Google Form
+export type StatusValidasiUrl =
+  | 'idle' // Belum ada masukan URL
+  | 'valid_short' // Domain forms.gle yang valid
+  | 'valid_full' // Domain docs.google.com/forms yang valid (/viewform)
+  | 'auto_corrected' // Tautan edit (/edit) yang berhasil dialihkan otomatis ke /viewform
+  | 'invalid_syntax' // Format URL rusak / tidak memenuhi standar HTTP(S)
+  | 'unsupported_domain'; // URL web valid namun bukan Google Form
 
 // Konfigurasi visual dan matematis untuk proses pembuatan QR Code
 export interface KonfigurasiQR {
@@ -40,29 +42,26 @@ export interface KonfigurasiQR {
   urlTervalidasi: string;
   labelFormulir: string;
   tagKategori: string;
-  warnaMatriks: string;      // Format Hex, contoh: #18181B
-  warnaLatar: string;        // Format Hex, contoh: #FFFFFF
-  marginModul: number;       // Quiet zone (rentang 1 sampai 6 modul)
+  warnaMatriks: string; // Format Hex, contoh: #18181B
+  warnaLatar: string; // Format Hex, contoh: #FFFFFF
+  marginModul: number; // Quiet zone (rentang 1 sampai 6 modul)
   tingkatKoreksi: TingkatKoreksiError;
   gayaModul: GayaModulQR;
   sematkanLogo: boolean;
-  rasioLogo: number;         // 0.15 hingga 0.22 dari lebar kanvas
-  dpiTarget: number;         // Default: 300 DPI untuk kualitas cetak fisik
-  modeSumberQR?: ModeSumberQR; // Sumber URL yang aktif dikodekan ke QR
-  kodePendek?: string;       // Kode slug tautan pendek yang terhubung
+  rasioLogo: number; // 0.15 hingga 0.22 dari lebar kanvas
+  dpiTarget: number; // Default: 300 DPI untuk kualitas cetak fisik
 }
 
 // Entitas riwayat formulir yang tersimpan secara lokal di peramban
 export interface ItemRiwayatFormulir {
-  id: string;                // Identifier unik UUID v4
-  label: string;             // Judul deskriptif formulir
-  urlTervalidasi: string;    // Tautan publik siap pindai
-  dibuatPada: string;        // Timestamp ISO 8601 UTC
-  terakhirDiakses: string;   // Timestamp ISO 8601 UTC
+  id: string; // Identifier unik UUID v4
+  label: string; // Judul deskriptif formulir
+  urlTervalidasi: string; // Tautan publik siap pindai
+  dibuatPada: string; // Timestamp ISO 8601 UTC
+  terakhirDiakses: string; // Timestamp ISO 8601 UTC
   konfigurasi: KonfigurasiQR;
-  jumlahUnduhan: number;     // Metrik frekuensi ekspor lokal
-  isPinned?: boolean;        // Penanda favorit agar tidak terhapus otomatis oleh LRU
-  kodePendek?: string;       // Slug short link yang dapat disalin kembali
+  jumlahUnduhan: number; // Metrik frekuensi ekspor lokal
+  isPinned?: boolean; // Penanda favorit agar tidak terhapus otomatis oleh LRU
 }
 
 // Hasil eksekusi evaluasi validator URL
@@ -71,10 +70,10 @@ export interface HasilValidasiUrl {
   urlBersih: string;
   pesanHumanis: string;
   dapatDiekspor: boolean;
-  formId?: string;           // ID formulir jika berhasil diekstraksi
+  formId?: string; // ID formulir jika berhasil diekstraksi
 }
 
-// Preset templat penggunaan cepat untuk mempermudah panitia di lapangan
+// Preset templat penggunaan cepat untuk mempermudah guru/panitia di lapangan
 export interface PresetTemplatForm {
   id: string;
   judul: string;
